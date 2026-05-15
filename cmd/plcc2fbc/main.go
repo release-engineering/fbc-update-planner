@@ -66,6 +66,7 @@ func main() {
 			log.Fatalf("failed to write PLCC dump: %v", err)
 		}
 		log.Printf("wrote %d PLCC entries to %s", catalog.Len(), plccDumpPath)
+		return
 	}
 
 	blobCount := fbc.GenerateFBC(catalog.Data, output, os.Stderr)

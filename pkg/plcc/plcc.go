@@ -128,7 +128,7 @@ func (c *Catalog) Dump(path string) error {
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	return enc.Encode(c.Data)
+	return enc.Encode(c)
 }
 
 // ParseTimestamp parses an ISO8601 timestamp as used by the PLCC API (e.g. "2007-06-01T00:00:00.000Z").

@@ -17,6 +17,7 @@ limitations under the License.
 package plcc
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -66,6 +67,42 @@ func TestFilterPackages(t *testing.T) {
 	}
 	if c.Data[0].Package != "pkg-a" || c.Data[1].Package != "pkg-c" {
 		t.Errorf("unexpected packages: %q, %q", c.Data[0].Package, c.Data[1].Package)
+	}
+}
+
+func TestDumpLoadRoundTrip(t *testing.T) {
+	original := &Catalog{Data: []Product{
+		{
+			Name:    "Product A",
+			Package: "pkg-a",
+			Versions: []Version{{
+				Name: "1.0",
+				Phases: []Phase{{
+					Name:      "Full support",
+					StartDate: "2025-01-01T00:00:00.000Z",
+					EndDate:   "2025-12-31T00:00:00.000Z",
+				}},
+				OpenShiftCompatibility: "4.12, 4.13",
+			}},
+		},
+		{
+			Name:    "Product B",
+			Package: "pkg-b",
+		},
+	}}
+
+	path := t.TempDir() + "/dump.json"
+	if err := original.Dump(path); err != nil {
+		t.Fatalf("Dump failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(original, loaded) {
+		t.Errorf("round-trip mismatch:\n got: %+v\nwant: %+v", loaded, original)
 	}
 }
 
