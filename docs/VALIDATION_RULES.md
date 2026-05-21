@@ -8,7 +8,7 @@ This document describes the rules that `plcc2fbc` uses to validate data from the
 
 After PLCC data is fetched and translated into FBC packages, each package passes through two stages:
 
-1. **Pre-pipeline checks** (`GenerateFBC` in `pkg/fbc/fbc.go`): rules that **operate across all raw entries** (for invalid and duplicate detection).
+1. **Pre-pipeline checks** (`TranslateAndValidate` in `pkg/fbc/fbc.go`): rules that **operate across all raw entries** (for invalid and duplicate detection).
 2. **Filter pipeline** (`pkg/fbc/filter.go`): an ordered sequence of `Filter` callbacks that can mutate, validate, or reject **a single package**.
 
 A package is emitted as an FBC blob only if it passes both stages.

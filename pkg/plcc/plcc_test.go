@@ -17,6 +17,9 @@ limitations under the License.
 package plcc
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
@@ -118,6 +121,43 @@ func TestSortByPackage(t *testing.T) {
 		if p.Package != want[i] {
 			t.Errorf("index %d: got %q, want %q", i, p.Package, want[i])
 		}
+	}
+}
+
+func TestFetchFrom(t *testing.T) {
+	catalog := &Catalog{Data: []Product{
+		{Name: "Test Product", Package: "test-pkg", Versions: []Version{
+			{Name: "1.0", Phases: []Phase{{Name: "GA", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"}}},
+		}},
+	}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(catalog)
+	}))
+	defer srv.Close()
+
+	got, err := FetchFrom(srv.URL, srv.Client())
+	if err != nil {
+		t.Fatalf("FetchFrom failed: %v", err)
+	}
+	if len(got.Data) != 1 {
+		t.Fatalf("got %d products, want 1", len(got.Data))
+	}
+	if got.Data[0].Package != "test-pkg" {
+		t.Errorf("got package %q, want %q", got.Data[0].Package, "test-pkg")
+	}
+}
+
+func TestFetchFromHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	_, err := FetchFrom(srv.URL, srv.Client())
+	if err == nil {
+		t.Fatal("expected error for HTTP 500, got nil")
 	}
 }
 

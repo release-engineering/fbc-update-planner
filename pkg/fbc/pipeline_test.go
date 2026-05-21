@@ -25,6 +25,64 @@ import (
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
+func TestTranslateAndValidate(t *testing.T) {
+	products := []plcc.Product{
+		{
+			Name:    "Valid Product",
+			Package: "valid-pkg",
+			Versions: []plcc.Version{{
+				Name: "1.0",
+				Phases: []plcc.Phase{
+					{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+					{Name: "Maintenance", StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+				},
+			}},
+		},
+		{Name: "Dup A", Package: "dup-pkg", Versions: []plcc.Version{{Name: "1.0"}}},
+		{Name: "Dup B", Package: "dup-pkg", Versions: []plcc.Version{{Name: "2.0"}}},
+		{
+			Name:    "Bad Version",
+			Package: "bad-pkg",
+			Versions: []plcc.Version{{
+				Name:   "not-semver",
+				Phases: []plcc.Phase{{Name: "GA", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"}},
+			}},
+		},
+	}
+
+	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
+
+	if len(valid) != 1 {
+		t.Fatalf("got %d valid packages, want 1", len(valid))
+	}
+	if valid[0].Name != "valid-pkg" {
+		t.Errorf("valid package name = %q, want %q", valid[0].Name, "valid-pkg")
+	}
+
+	if len(failures) != 2 {
+		t.Fatalf("got %d failures, want 2", len(failures))
+	}
+
+	dupFound, badFound := false, false
+	for _, f := range failures {
+		if f.PackageName == "dup-pkg" {
+			dupFound = true
+		}
+		if f.PackageName == "bad-pkg" {
+			badFound = true
+		}
+		if f.Valid {
+			t.Errorf("failure for %q has Valid=true, want false", f.PackageName)
+		}
+	}
+	if !dupFound {
+		t.Error("expected failure for duplicate package \"dup-pkg\"")
+	}
+	if !badFound {
+		t.Error("expected failure for invalid version in \"bad-pkg\"")
+	}
+}
+
 // TestReferenceFile runs the full pipeline on the reference PLCC testdata/plcc.json file.
 // The result is compared against the expected FBC file output (testdata/reference-fbc.yaml).
 func TestReferenceFile(t *testing.T) {

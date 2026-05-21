@@ -66,9 +66,102 @@ type ValidationResult struct {
 	Reasons     []string `json:"reasons,omitempty"`
 }
 
-// NewPackage creates an FBC Package from a PLCC product, performing pure translation
-// without validation. Unparseable timestamps are stored as empty strings.
-func NewPackage(product plcc.Product) *Package {
+// GenerateFBC converts PLCC products to FBC data in the specified format ("json" or "yaml"),
+// writing valid packages to output and validation failures as JSON to logOutput.
+// Returns the number of valid packages emitted.
+func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer, format string) (int, error) {
+	if format != "json" && format != "yaml" {
+		return 0, fmt.Errorf("unsupported format %q: must be \"json\" or \"yaml\"", format)
+	}
+
+	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
+
+	logEnc := json.NewEncoder(logOutput)
+	for _, f := range failures {
+		logEnc.Encode(f)
+	}
+
+	if err := MarshalPackages(valid, output, format); err != nil {
+		return 0, err
+	}
+	return len(valid), nil
+}
+
+// TranslateAndValidate translates PLCC products to FBC packages and validates them through
+// the provided filter pipeline. Returns the valid packages and a list of validation
+// failures.
+func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Package, []ValidationResult) {
+	pkgCount := make(map[string]int)
+	for _, p := range products {
+		pkgCount[p.Package]++
+	}
+
+	var failures []ValidationResult
+	alreadyLogged := make(map[string]bool)
+	validPackages := make([]*Package, 0)
+	for _, product := range products {
+		if pkgCount[product.Package] > 1 {
+			if !alreadyLogged[product.Package] {
+				failures = append(failures, ValidationResult{
+					PackageName: product.Package,
+					Valid:       false,
+					Reasons:     []string{"package appears in multiple products"},
+				})
+				alreadyLogged[product.Package] = true
+			}
+			continue
+		}
+
+		pkg := newPackage(product)
+		reasons := pkg.Filter(filters...)
+		if len(reasons) > 0 {
+			failures = append(failures, ValidationResult{
+				PackageName: product.Package,
+				Valid:       false,
+				Reasons:     reasons,
+			})
+			continue
+		}
+
+		validPackages = append(validPackages, pkg)
+	}
+
+	return validPackages, failures
+}
+
+// MarshalPackages writes packages to output in the specified format ("json" or "yaml").
+func MarshalPackages(packages []*Package, output io.Writer, format string) error {
+	if format != "json" && format != "yaml" {
+		return fmt.Errorf("unsupported format %q: must be \"json\" or \"yaml\"", format)
+	}
+	if format == "yaml" {
+		for i, pkg := range packages {
+			yamlBytes, err := yaml.Marshal(pkg)
+			if err != nil {
+				return fmt.Errorf("marshaling package %q: %w", pkg.Name, err)
+			}
+			if i > 0 {
+				yamlBytes = append([]byte("---\n"), yamlBytes...)
+			}
+			if _, err := output.Write(yamlBytes); err != nil {
+				return fmt.Errorf("writing package %q: %w", pkg.Name, err)
+			}
+		}
+		return nil
+	}
+
+	jsonBytes, err := json.MarshalIndent(packages, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling JSON: %w", err)
+	}
+	jsonBytes = append(jsonBytes, '\n')
+	if _, err := output.Write(jsonBytes); err != nil {
+		return fmt.Errorf("writing JSON: %w", err)
+	}
+	return nil
+}
+
+func newPackage(product plcc.Product) *Package {
 	pkg := &Package{
 		Schema: Schema,
 		Name:   product.Package,
@@ -121,78 +214,6 @@ func translatePhase(ph plcc.Phase) Phase {
 		end = plcc.FormatDate(t)
 	}
 	return Phase{Name: ph.Name, StartDate: start, EndDate: end}
-}
-
-// GenerateFBC converts PLCC products to FBC data in the specified format ("json" or "yaml"),
-// writing valid packages to output and validation failures as JSON to logOutput.
-// Returns the number of valid packages emitted.
-func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer, format string) (int, error) {
-	if format != "json" && format != "yaml" {
-		return 0, fmt.Errorf("unsupported format %q: must be \"json\" or \"yaml\"", format)
-	}
-
-	pipeline := DefaultFilters()
-
-	pkgCount := make(map[string]int)
-	for _, p := range products {
-		pkgCount[p.Package]++
-	}
-
-	logEnc := json.NewEncoder(logOutput)
-	alreadyLogged := make(map[string]bool)
-	validPackages := make([]*Package, 0)
-	for _, product := range products {
-		if pkgCount[product.Package] > 1 {
-			if !alreadyLogged[product.Package] {
-				logEnc.Encode(ValidationResult{
-					PackageName: product.Package,
-					Valid:       false,
-					Reasons:     []string{"package appears in multiple products"},
-				})
-				alreadyLogged[product.Package] = true
-			}
-			continue
-		}
-
-		pkg := NewPackage(product)
-		reasons := pkg.Filter(pipeline...)
-		if len(reasons) > 0 {
-			logEnc.Encode(ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     reasons,
-			})
-			continue
-		}
-
-		validPackages = append(validPackages, pkg)
-	}
-
-	if format == "yaml" {
-		for i, pkg := range validPackages {
-			yamlBytes, err := yaml.Marshal(pkg)
-			if err != nil {
-				return i, fmt.Errorf("marshaling package %q: %w", pkg.Name, err)
-			}
-			if i > 0 {
-				yamlBytes = append([]byte("---\n"), yamlBytes...)
-			}
-			if _, err := output.Write(yamlBytes); err != nil {
-				return i, fmt.Errorf("writing package %q: %w", pkg.Name, err)
-			}
-		}
-	} else {
-		jsonBytes, err := json.MarshalIndent(validPackages, "", "  ")
-		if err != nil {
-			return 0, fmt.Errorf("marshaling JSON: %w", err)
-		}
-		jsonBytes = append(jsonBytes, '\n')
-		if _, err := output.Write(jsonBytes); err != nil {
-			return 0, fmt.Errorf("writing JSON: %w", err)
-		}
-	}
-
-	return len(validPackages), nil
 }
 
 func compareMajorMinor(a, b string) int {

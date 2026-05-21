@@ -59,10 +59,14 @@ type Phase struct {
 	EndDate   string `json:"end_date"`
 }
 
-// Fetch retrieves the product catalog from the PLCC API.
+// Fetch retrieves the product catalog from the default PLCC API endpoint.
 func Fetch() (*Catalog, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(APIURL)
+	return FetchFrom(APIURL, &http.Client{Timeout: 30 * time.Second})
+}
+
+// FetchFrom retrieves the product catalog from the given URL using the provided HTTP client.
+func FetchFrom(url string, client *http.Client) (*Catalog, error) {
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
