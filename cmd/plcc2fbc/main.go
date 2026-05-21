@@ -18,7 +18,9 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
+	"io"
+	"log/slog"
 	"os"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
@@ -30,25 +32,42 @@ const packageNotFound = 1
 func main() {
 	var writePath string
 	var format string
+	var logPath string
 	var plccDumpPath string
 	var inputPath string
 
 	flag.StringVar(&writePath, "w", "", "write FBC data to a file (required)")
 	flag.StringVar(&format, "o", "json", "output format: json or yaml")
+	flag.StringVar(&logPath, "l", "", "write operational logs to a file (default: stdout)")
 	flag.StringVar(&inputPath, "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.StringVar(&plccDumpPath, "dump-plcc", "", "dump filtered PLCC JSON to a file")
 	flag.Parse()
 
+	var logWriter io.Writer = os.Stdout
+	if logPath != "" {
+		lf, err := os.Create(logPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create log file: %v\n", err)
+			os.Exit(1)
+		}
+		defer lf.Close()
+		logWriter = lf
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logWriter, nil)))
+
 	if writePath == "" {
-		log.Fatal("-w flag is required: specify an output file path")
+		slog.Error("missing required flag", "flag", "-w")
+		os.Exit(1)
 	}
 	if format != "json" && format != "yaml" {
-		log.Fatalf("-o flag must be \"json\" or \"yaml\", got %q", format)
+		slog.Error("invalid output format", "flag", "-o", "value", format, "allowed", "json,yaml")
+		os.Exit(1)
 	}
 
 	f, err := os.Create(writePath)
 	if err != nil {
-		log.Fatalf("failed to create output file: %v", err)
+		slog.Error("failed to create output file", "path", writePath, "error", err)
+		os.Exit(1)
 	}
 	defer f.Close()
 	output := f
@@ -60,29 +79,32 @@ func main() {
 		catalog, err = plcc.Fetch()
 	}
 	if err != nil {
-		log.Fatalf("failed to load PLCC data: %v", err)
+		slog.Error("failed to load PLCC data", "error", err)
+		os.Exit(1)
 	}
 
-	log.Printf("fetched %d products from PLCC", catalog.Len())
+	slog.Info("fetched products from PLCC", "count", catalog.Len())
 	catalog.FilterPackages()
-	log.Printf("found %d packages", catalog.Len())
+	slog.Info("filtered packages", "count", catalog.Len())
 	catalog.SortByPackage()
 
 	if plccDumpPath != "" {
 		if err := catalog.Dump(plccDumpPath); err != nil {
-			log.Fatalf("failed to write PLCC dump: %v", err)
+			slog.Error("failed to write PLCC dump", "path", plccDumpPath, "error", err)
+			os.Exit(1)
 		}
-		log.Printf("wrote %d PLCC entries to %s", catalog.Len(), plccDumpPath)
+		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", plccDumpPath)
 		return
 	}
 
 	blobCount, err := fbc.GenerateFBC(catalog.Data, output, os.Stderr, format)
 	if err != nil {
-		log.Fatalf("failed to generate FBC: %v", err)
+		slog.Error("failed to generate FBC", "error", err)
+		os.Exit(1)
 	}
 	if blobCount == 0 {
-		log.Print("no valid FBC data found")
+		slog.Warn("no valid FBC data found")
 		os.Exit(packageNotFound)
 	}
-	log.Printf("wrote %d FBC blobs", blobCount)
+	slog.Info("wrote FBC data", "count", blobCount, "path", writePath, "format", format)
 }

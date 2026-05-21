@@ -14,6 +14,7 @@ test:
 
 .PHONY: generate-fbc
 generate-fbc: plcc2fbc
-	bin/plcc2fbc -w fbc-samples/fbc-$(DATE).yaml -o yaml 2>fbc-samples/fbc-$(DATE).log
+	bin/plcc2fbc -w fbc-samples/fbc-$(DATE).yaml -o yaml -l fbc-samples/fbc-$(DATE).log 2>fbc-samples/fbc-$(DATE).validation.log
 	cp -f fbc-samples/fbc-$(DATE).yaml fbc-samples/fbc-latest.yaml
 	cp -f fbc-samples/fbc-$(DATE).log fbc-samples/fbc-latest.log
+	cp -f fbc-samples/fbc-$(DATE).validation.log fbc-samples/fbc-latest.validation.log
