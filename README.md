@@ -18,7 +18,7 @@ bin/plcc2fbc [flags]
 
 | Flag | Description |
 |------|-------------|
-| `-o <file>` | Write FBC YAML to `<file>` instead of stdout |
+| `-w <file>` | Write FBC data to `<file>` (required) |
 | `-i <file>` | Read PLCC JSON input from `<file>` instead of fetching from API |
 | `-dump-plcc <file>` | Write filtered PLCC JSON dump to `<file>` |
 

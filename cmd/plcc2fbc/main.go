@@ -28,27 +28,27 @@ import (
 const packageNotFound = 1
 
 func main() {
-	var outputPath string
+	var writePath string
 	var plccDumpPath string
 	var inputPath string
 
-	flag.StringVar(&outputPath, "o", "", "write FBC data to a file instead of stdout")
+	flag.StringVar(&writePath, "w", "", "write FBC data to a file (required)")
 	flag.StringVar(&inputPath, "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.StringVar(&plccDumpPath, "dump-plcc", "", "dump filtered PLCC JSON to a file")
 	flag.Parse()
 
-	output := os.Stdout
-	if outputPath != "" {
-		f, err := os.Create(outputPath)
-		if err != nil {
-			log.Fatalf("failed to create output file: %v", err)
-		}
-		defer f.Close()
-		output = f
+	if writePath == "" {
+		log.Fatal("-w flag is required: specify an output file path")
 	}
 
+	f, err := os.Create(writePath)
+	if err != nil {
+		log.Fatalf("failed to create output file: %v", err)
+	}
+	defer f.Close()
+	output := f
+
 	var catalog *plcc.Catalog
-	var err error
 	if inputPath != "" {
 		catalog, err = plcc.Load(inputPath)
 	} else {
