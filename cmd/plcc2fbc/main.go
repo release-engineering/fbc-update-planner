@@ -17,12 +17,13 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
@@ -38,11 +39,11 @@ func main() {
 	var plccDumpPath string
 	var inputPath string
 
-	flag.StringVar(&writePath, "w", "", "write FBC data to a file (required)")
-	flag.StringVar(&format, "o", "json", "output format: json or yaml")
-	flag.StringVar(&logPath, "l", "", "write operational logs to a file (default: stdout)")
-	flag.StringVar(&packages, "p", "", "comma-separated list of package names to include")
-	flag.StringVar(&inputPath, "i", "", "read PLCC JSON input from a file instead of fetching from API")
+	flag.StringVarP(&writePath, "write", "w", "", "write FBC data to a file (required)")
+	flag.StringVarP(&format, "output", "o", "json", "output format: json or yaml")
+	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file (default: stdout)")
+	flag.StringVarP(&packages, "package", "p", "", "comma-separated list of package names to include")
+	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.StringVar(&plccDumpPath, "dump-plcc", "", "dump filtered PLCC JSON to a file")
 	flag.Parse()
 
