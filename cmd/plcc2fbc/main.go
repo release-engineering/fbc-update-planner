@@ -17,8 +17,10 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"os"
 	"strings"
@@ -29,18 +31,27 @@ import (
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
-const packageNotFound = 1
+var errPackageNotFound = errors.New("no FBC data generated")
 
 func main() {
+	if err := run(); err != nil {
+		if errors.Is(err, errPackageNotFound) {
+			os.Exit(2)
+		}
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	var format string
 	var logPath string
 	var packages string
 	var dumpPLCC bool
 	var inputPath string
 
-	flag.StringVarP(&format, "output", "o", "json", "output format: json or yaml")
+	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
 	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file (default: stdout)")
-	flag.StringVarP(&packages, "package", "p", "", "comma-separated list of package names to include")
+	flag.StringVarP(&packages, "package", "p", "", "comma-separated package names to process (default: all)")
 	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
 	flag.Usage = func() {
@@ -53,8 +64,7 @@ func main() {
 	if logPath != "" {
 		lf, err := os.Create(logPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to create log file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create log file: %w", err)
 		}
 		defer lf.Close()
 		logWriter = lf
@@ -63,18 +73,17 @@ func main() {
 
 	if flag.NArg() != 1 {
 		flag.Usage()
-		os.Exit(1)
+		return fmt.Errorf("missing output file")
 	}
 	writePath := flag.Arg(0)
-	if format != "json" && format != "yaml" {
-		slog.Error("invalid output format", "flag", "-o", "value", format, "allowed", "json,yaml")
-		os.Exit(1)
+
+	writer, err := fbc.NewPackageWriter(format)
+	if err != nil {
+		slog.Error("invalid output format", "flag", "-o", "value", format, "allowed", "json,json-pretty,yaml")
+		return err
 	}
 
-	var (
-		catalog *plcc.Catalog
-		err     error
-	)
+	var catalog *plcc.Catalog
 	if inputPath != "" {
 		catalog, err = plcc.Load(inputPath)
 	} else {
@@ -82,7 +91,7 @@ func main() {
 	}
 	if err != nil {
 		slog.Error("failed to load PLCC data", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	slog.Info("fetched products from PLCC", "count", catalog.Len())
@@ -104,27 +113,28 @@ func main() {
 	if dumpPLCC {
 		if err := catalog.Dump(writePath); err != nil {
 			slog.Error("failed to write PLCC dump", "path", writePath, "error", err)
-			os.Exit(1)
+			return err
 		}
 		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
-		return
+		return nil
 	}
 
 	f, err := os.Create(writePath)
 	if err != nil {
 		slog.Error("failed to create output file", "path", writePath, "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer f.Close()
 
-	blobCount, err := fbc.GenerateFBC(catalog.Data, f, os.Stderr, format)
+	blobCount, err := fbc.GenerateFBC(catalog.Data, f, os.Stderr, writer)
 	if err != nil {
 		slog.Error("failed to generate FBC", "error", err)
-		os.Exit(1)
+		return err
 	}
 	if blobCount == 0 {
-		slog.Warn("no valid FBC data found")
-		os.Exit(packageNotFound)
+		slog.Warn("no FBC data generated")
+		return errPackageNotFound
 	}
 	slog.Info("wrote FBC data", "count", blobCount, "path", writePath, "format", format)
+	return nil
 }

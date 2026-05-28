@@ -1,0 +1,1313 @@
+package: advanced-cluster-management
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "2.0"
+  phases:
+  - endDate: "2020-12-05"
+    name: Full support
+    startDate: "2020-07-30"
+  - endDate: "2021-09-09"
+    name: Maintenance support
+    startDate: "2020-12-06"
+- name: "2.1"
+  phases:
+  - endDate: "2021-04-05"
+    name: Full support
+    startDate: "2020-11-05"
+  - endDate: "2021-12-05"
+    name: Maintenance support
+    startDate: "2021-04-06"
+- name: "2.2"
+  phases:
+  - endDate: "2021-09-09"
+    name: Full support
+    startDate: "2021-03-04"
+  - endDate: "2022-07-08"
+    name: Maintenance support
+    startDate: "2021-09-10"
+- name: "2.3"
+  phases:
+  - endDate: "2021-12-10"
+    name: Full support
+    startDate: "2021-08-09"
+  - endDate: "2022-10-07"
+    name: Maintenance support
+    startDate: "2021-12-11"
+- name: "2.4"
+  phases:
+  - endDate: "2022-07-08"
+    name: Full support
+    startDate: "2021-11-10"
+  - endDate: "2022-12-10"
+    name: Maintenance support
+    startDate: "2022-07-09"
+- name: "2.5"
+  phases:
+  - endDate: "2022-12-08"
+    name: Full support
+    startDate: "2022-06-08"
+  - endDate: "2023-07-07"
+    name: Maintenance support
+    startDate: "2022-12-09"
+- name: "2.6"
+  phases:
+  - endDate: "2023-09-11"
+    name: Full support
+    startDate: "2022-08-29"
+  - endDate: "2023-12-13"
+    name: Maintenance support
+    startDate: "2023-09-12"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.9"
+    - "4.10"
+    - "4.11"
+    - "4.12"
+- name: "2.7"
+  phases:
+  - endDate: "2024-03-07"
+    name: Full support
+    startDate: "2023-02-06"
+  - endDate: "2024-08-16"
+    name: Maintenance support
+    startDate: "2024-03-08"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.10"
+    - "4.11"
+    - "4.12"
+    - "4.13"
+- name: "2.8"
+  phases:
+  - endDate: "2024-07-09"
+    name: Full support
+    startDate: "2023-06-08"
+  - endDate: "2024-12-10"
+    name: Maintenance support
+    startDate: "2024-07-10"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.11"
+    - "4.12"
+    - "4.13"
+    - "4.14"
+- name: "2.9"
+  phases:
+  - endDate: "2024-07-16"
+    name: Full support
+    startDate: "2023-11-15"
+  - endDate: "2025-06-17"
+    name: Maintenance support
+    startDate: "2024-07-17"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.13"
+    - "4.14"
+    - "4.15"
+- name: "2.10"
+  phases:
+  - endDate: "2024-10-22"
+    name: Full support
+    startDate: "2024-03-21"
+  - endDate: "2025-09-23"
+    name: Maintenance support
+    startDate: "2024-10-23"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.15"
+    - "4.14"
+    - "4.13"
+    - "4.16"
+- name: "2.11"
+  phases:
+  - endDate: "2025-08-15"
+    name: Full support
+    startDate: "2024-07-18"
+  - endDate: "2026-01-16"
+    name: Maintenance support
+    startDate: "2025-08-16"
+  - endDate: "2026-06-12"
+    name: Extended update support
+    startDate: "2026-01-17"
+  - endDate: "2027-06-11"
+    name: Extended update support Term 2
+    startDate: "2026-06-13"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+- name: "2.12"
+  phases:
+  - endDate: "2026-01-15"
+    name: Full support
+    startDate: "2024-11-06"
+  - endDate: "2026-06-09"
+    name: Maintenance support
+    startDate: "2026-01-16"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+- name: "2.13"
+  phases:
+  - endDate: "2026-04-17"
+    name: Full support
+    startDate: "2025-03-20"
+  - endDate: "2026-09-18"
+    name: Maintenance support
+    startDate: "2026-04-18"
+  - endDate: "2027-02-12"
+    name: Extended update support
+    startDate: "2026-09-19"
+  - endDate: "2028-02-13"
+    name: Extended update support Term 2
+    startDate: "2027-02-13"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+- name: "2.14"
+  phases:
+  - endDate: "2026-10-02"
+    name: Full support
+    startDate: "2025-08-01"
+  - endDate: "2027-02-24"
+    name: Maintenance support
+    startDate: "2026-10-03"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+- name: "2.15"
+  phases:
+  - endDate: "2027-01-08"
+    name: Full support
+    startDate: "2025-12-03"
+  - endDate: "2027-06-01"
+    name: Maintenance support
+    startDate: "2027-01-09"
+  - endDate: "2027-11-12"
+    name: Extended update support
+    startDate: "2027-06-02"
+  - endDate: "2028-11-13"
+    name: Extended update support Term 2
+    startDate: "2027-11-13"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.18"
+    - "4.19"
+    - "4.20"
+    - "4.21"
+- name: "2.16"
+  phases:
+  - endDate: "2027-04-09"
+    name: Full support
+    startDate: "2026-03-10"
+  - endDate: "2027-09-10"
+    name: Maintenance support
+    startDate: "2027-04-10"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.21"
+    - "4.20"
+    - "4.19"
+---
+package: ansible-automation-platform-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.2"
+  phases:
+  - endDate: "2021-05-18"
+    name: Full support
+    startDate: "2019-11-18"
+  - endDate: "2022-05-18"
+    name: Maintenance Support 1
+    startDate: "2021-05-19"
+  - endDate: "2023-09-29"
+    name: Maintenance support 2
+    startDate: "2022-05-19"
+  - endDate: "2024-12-31"
+    name: Extended life cycle support (ELS) add-on
+    startDate: "2023-09-30"
+- name: "2.0"
+  phases:
+  - endDate: "2022-01-15"
+    name: Full support
+    startDate: "2021-07-15"
+  - endDate: "2022-07-15"
+    name: Maintenance Support 1
+    startDate: "2022-01-16"
+  - endDate: "2022-08-26"
+    name: Maintenance support 2
+    startDate: "2022-07-16"
+- name: "2.1"
+  phases:
+  - endDate: "2022-06-02"
+    name: Full support
+    startDate: "2021-12-02"
+  - endDate: "2022-12-02"
+    name: Maintenance Support 1
+    startDate: "2022-06-03"
+  - endDate: "2023-06-02"
+    name: Maintenance support 2
+    startDate: "2022-12-03"
+- name: "2.2"
+  phases:
+  - endDate: "2022-11-24"
+    name: Full support
+    startDate: "2022-05-26"
+  - endDate: "2023-05-24"
+    name: Maintenance Support 1
+    startDate: "2022-11-25"
+  - endDate: "2023-11-26"
+    name: Maintenance support 2
+    startDate: "2023-05-25"
+- name: "2.3"
+  phases:
+  - endDate: "2023-06-30"
+    name: Full support
+    startDate: "2022-11-29"
+  - endDate: "2023-11-29"
+    name: Maintenance Support 1
+    startDate: "2023-07-01"
+  - endDate: "2024-05-31"
+    name: Maintenance support 2
+    startDate: "2023-11-30"
+- name: "2.4"
+  phases:
+  - endDate: "2024-10-01"
+    name: Full support
+    startDate: "2023-06-27"
+  - endDate: "2025-10-01"
+    name: Maintenance Support 1
+    startDate: "2024-10-02"
+  - endDate: "2026-06-30"
+    name: Maintenance support 2
+    startDate: "2025-10-02"
+  - endDate: "2027-06-30"
+    name: Extended update support
+    startDate: "2026-07-01"
+  - endDate: "2028-06-30"
+    name: Extended update support Term 2
+    startDate: "2027-07-01"
+- name: "2.5"
+  phases:
+  - endDate: "2025-10-02"
+    name: Full support
+    startDate: "2024-09-30"
+  - endDate: "2026-10-02"
+    name: Maintenance Support 1
+    startDate: "2025-10-03"
+  - endDate: "2027-10-02"
+    name: Maintenance support 2
+    startDate: "2026-10-03"
+- name: "2.6"
+  phases:
+  - endDate: "2026-10-01"
+    name: Full support
+    startDate: "2025-10-01"
+  - endDate: "2027-10-01"
+    name: Maintenance Support 1
+    startDate: "2026-10-02"
+  - endDate: "2028-10-01"
+    name: Maintenance support 2
+    startDate: "2027-10-02"
+---
+package: businessautomation-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "7.0"
+  phases:
+  - endDate: "2022-05-31"
+    name: Full support
+    startDate: "2018-05-30"
+  - endDate: "2024-05-31"
+    name: Maintenance support
+    startDate: "2022-06-01"
+  - endDate: "2026-05-31"
+    name: Extended life cycle support (ELS) 1
+    startDate: "2024-06-01"
+---
+package: fuse-apicurito
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "7.13"
+  phases:
+  - endDate: "2024-06-30"
+    name: Maintenance support
+    startDate: "2024-06-10"
+  - endDate: "2026-06-30"
+    name: Extended life cycle support (ELS) 1
+    startDate: "2024-07-01"
+  - endDate: "2027-06-30"
+    name: Extended life cycle support (ELS) 2
+    startDate: "2026-07-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.13"
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+---
+package: fuse-console
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.13"
+  phases:
+  - endDate: "2024-06-30"
+    name: Maintenance support
+    startDate: "2024-06-10"
+  - endDate: "2026-06-30"
+    name: Extended life cycle support (ELS) 1
+    startDate: "2024-07-01"
+  - endDate: "2027-06-30"
+    name: Extended life cycle support (ELS) 2
+    startDate: "2026-07-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.13"
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+---
+package: fuse-online
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.12"
+  phases:
+  - endDate: "2024-06-30"
+    name: Maintenance support
+    startDate: "2023-06-29"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.10"
+    - "4.11"
+    - "4.13"
+---
+package: kernel-module-management-hub
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.1"
+  phases:
+  - endDate: "2023-08-31"
+    name: Full support
+    startDate: "2023-06-27"
+  - endDate: "2023-11-30"
+    name: Maintenance support
+    startDate: "2023-09-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.13"
+- name: "2.0"
+  phases:
+  - endDate: "2024-01-31"
+    name: Full support
+    startDate: "2023-11-29"
+  - endDate: "2024-04-30"
+    name: Maintenance support
+    startDate: "2024-02-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+- name: "2.1"
+  phases:
+  - endDate: "2024-11-01"
+    name: Full support
+    startDate: "2024-05-01"
+  - endDate: "2025-04-30"
+    name: Maintenance support
+    startDate: "2024-11-02"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+- name: "2.2"
+  phases:
+  - endDate: "2025-05-21"
+    name: Full support
+    startDate: "2024-11-21"
+  - endDate: "2025-11-21"
+    name: Maintenance support
+    startDate: "2025-05-22"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+- name: "2.3"
+  phases:
+  - endDate: "2025-08-06"
+    name: Full support
+    startDate: "2025-03-06"
+  - endDate: "2026-03-06"
+    name: Maintenance support
+    startDate: "2025-08-07"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+- name: "2.4"
+  phases:
+  - endDate: "2025-11-26"
+    name: Full support
+    startDate: "2025-06-26"
+  - endDate: "2026-06-26"
+    name: Maintenance support
+    startDate: "2025-11-27"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+- name: "2.5"
+  phases:
+  - endDate: "2026-05-03"
+    name: Full support
+    startDate: "2025-12-08"
+  - endDate: "2027-04-21"
+    name: Maintenance support
+    startDate: "2026-05-04"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+- name: "2.6"
+  phases:
+  - endDate: "2026-06-24"
+    name: Full support
+    startDate: "2026-03-24"
+  - endDate: "2026-10-24"
+    name: Maintenance support
+    startDate: "2026-06-25"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+    - "4.16"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+    - "4.21"
+---
+package: klusterlet-product
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "2.0"
+  phases:
+  - endDate: "2022-09-07"
+    name: Full support
+    startDate: "2022-06-06"
+  - endDate: "2023-07-07"
+    name: Maintenance support
+    startDate: "2022-09-08"
+- name: "2.1"
+  phases:
+  - endDate: "2023-03-10"
+    name: Full support
+    startDate: "2022-08-29"
+  - endDate: "2023-10-13"
+    name: Maintenance support
+    startDate: "2023-03-11"
+- name: "2.2"
+  phases:
+  - endDate: "2023-10-09"
+    name: Full support
+    startDate: "2023-02-06"
+  - endDate: "2024-04-08"
+    name: Maintenance support
+    startDate: "2023-10-10"
+- name: "2.3"
+  phases:
+  - endDate: "2024-02-08"
+    name: Full support
+    startDate: "2023-06-08"
+  - endDate: "2024-08-08"
+    name: Maintenance support
+    startDate: "2024-02-09"
+- name: "2.4"
+  phases:
+  - endDate: "2024-07-16"
+    name: Full support
+    startDate: "2023-11-15"
+  - endDate: "2025-06-17"
+    name: Maintenance support
+    startDate: "2024-07-17"
+- name: "2.5"
+  phases:
+  - endDate: "2024-10-22"
+    name: Full support
+    startDate: "2024-03-12"
+  - endDate: "2025-09-23"
+    name: Maintenance support
+    startDate: "2024-10-23"
+---
+package: mtr-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.0"
+  phases:
+  - endDate: "2023-05-31"
+    name: Full support
+    startDate: "2022-11-17"
+- name: "1.1"
+  phases:
+  - endDate: "2023-09-14"
+    name: Full support
+    startDate: "2023-05-31"
+- name: "1.2"
+  phases:
+  - endDate: "2024-09-30"
+    name: Full support
+    startDate: "2023-09-14"
+---
+package: odf-multicluster-orchestrator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "4.12"
+  phases:
+  - endDate: "2023-09-21"
+    name: Full support
+    startDate: "2023-01-31"
+  - endDate: "2024-07-17"
+    name: Maintenance support
+    startDate: "2023-09-22"
+  - endDate: "2025-01-17"
+    name: Extended update support
+    startDate: "2024-07-18"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+- name: "4.13"
+  phases:
+  - endDate: "2024-02-08"
+    name: Full support
+    startDate: "2023-06-21"
+  - endDate: "2024-11-17"
+    name: Maintenance support
+    startDate: "2024-02-09"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.13"
+- name: "4.14"
+  phases:
+  - endDate: "2024-06-18"
+    name: Full support
+    startDate: "2023-11-08"
+  - endDate: "2025-05-01"
+    name: Maintenance support
+    startDate: "2024-06-19"
+  - endDate: "2025-10-31"
+    name: Extended update support
+    startDate: "2025-05-02"
+  - endDate: "2026-10-31"
+    name: Extended update support Term 2
+    startDate: "2025-11-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+- name: "4.15"
+  phases:
+  - endDate: "2024-10-16"
+    name: Full support
+    startDate: "2024-03-19"
+  - endDate: "2025-08-27"
+    name: Maintenance support
+    startDate: "2024-10-17"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.15"
+- name: "4.16"
+  phases:
+  - endDate: "2025-01-30"
+    name: Full support
+    startDate: "2024-07-17"
+  - endDate: "2025-12-27"
+    name: Maintenance support
+    startDate: "2025-01-31"
+  - endDate: "2026-06-27"
+    name: Extended update support
+    startDate: "2025-12-28"
+  - endDate: "2027-06-27"
+    name: Extended update support Term 2
+    startDate: "2026-06-28"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.16"
+- name: "4.17"
+  phases:
+  - endDate: "2025-06-11"
+    name: Full support
+    startDate: "2024-10-30"
+  - endDate: "2026-04-01"
+    name: Maintenance support
+    startDate: "2025-06-12"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.17"
+- name: "4.18"
+  phases:
+  - endDate: "2025-10-28"
+    name: Full support
+    startDate: "2025-03-11"
+  - endDate: "2026-08-25"
+    name: Maintenance support
+    startDate: "2025-10-29"
+  - endDate: "2027-02-25"
+    name: Extended update support
+    startDate: "2026-08-26"
+  - endDate: "2028-02-25"
+    name: Extended update support Term 2
+    startDate: "2027-02-26"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.18"
+- name: "4.19"
+  phases:
+  - endDate: "2026-02-18"
+    name: Full support
+    startDate: "2025-07-28"
+  - endDate: "2026-12-17"
+    name: Maintenance support
+    startDate: "2026-02-19"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.19"
+- name: "4.20"
+  phases:
+  - endDate: "2026-06-09"
+    name: Full support
+    startDate: "2025-11-18"
+  - endDate: "2027-04-21"
+    name: Maintenance support
+    startDate: "2026-06-10"
+  - endDate: "2027-10-21"
+    name: Extended update support
+    startDate: "2027-04-22"
+  - endDate: "2028-11-21"
+    name: Extended update support Term 2
+    startDate: "2027-10-22"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.20"
+---
+package: odr-cluster-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "4.12"
+  phases:
+  - endDate: "2023-09-21"
+    name: Full support
+    startDate: "2023-01-31"
+  - endDate: "2024-07-17"
+    name: Maintenance support
+    startDate: "2023-09-22"
+  - endDate: "2025-01-17"
+    name: Extended update support
+    startDate: "2024-07-18"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+- name: "4.13"
+  phases:
+  - endDate: "2024-02-08"
+    name: Full support
+    startDate: "2023-06-21"
+  - endDate: "2024-11-17"
+    name: Maintenance support
+    startDate: "2024-02-09"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.13"
+- name: "4.14"
+  phases:
+  - endDate: "2024-06-18"
+    name: Full support
+    startDate: "2023-11-08"
+  - endDate: "2025-05-01"
+    name: Maintenance support
+    startDate: "2024-06-19"
+  - endDate: "2025-10-31"
+    name: Extended update support
+    startDate: "2025-05-02"
+  - endDate: "2026-10-31"
+    name: Extended update support Term 2
+    startDate: "2025-11-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+- name: "4.15"
+  phases:
+  - endDate: "2024-10-16"
+    name: Full support
+    startDate: "2024-03-19"
+  - endDate: "2025-08-27"
+    name: Maintenance support
+    startDate: "2024-10-17"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.15"
+- name: "4.16"
+  phases:
+  - endDate: "2025-01-30"
+    name: Full support
+    startDate: "2024-07-17"
+  - endDate: "2025-12-27"
+    name: Maintenance support
+    startDate: "2025-01-31"
+  - endDate: "2026-06-27"
+    name: Extended update support
+    startDate: "2025-12-28"
+  - endDate: "2027-06-27"
+    name: Extended update support Term 2
+    startDate: "2026-06-28"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.16"
+- name: "4.17"
+  phases:
+  - endDate: "2025-06-11"
+    name: Full support
+    startDate: "2024-10-30"
+  - endDate: "2026-04-01"
+    name: Maintenance support
+    startDate: "2025-06-12"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.17"
+- name: "4.18"
+  phases:
+  - endDate: "2025-10-28"
+    name: Full support
+    startDate: "2025-03-11"
+  - endDate: "2026-08-25"
+    name: Maintenance support
+    startDate: "2025-10-29"
+  - endDate: "2027-02-25"
+    name: Extended update support
+    startDate: "2026-08-26"
+  - endDate: "2028-02-25"
+    name: Extended update support Term 2
+    startDate: "2027-02-26"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.18"
+- name: "4.19"
+  phases:
+  - endDate: "2026-02-18"
+    name: Full support
+    startDate: "2025-07-28"
+  - endDate: "2026-12-17"
+    name: Maintenance support
+    startDate: "2026-02-19"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.19"
+- name: "4.20"
+  phases:
+  - endDate: "2026-06-09"
+    name: Full support
+    startDate: "2025-11-18"
+  - endDate: "2027-04-21"
+    name: Maintenance support
+    startDate: "2026-06-10"
+  - endDate: "2027-10-21"
+    name: Extended update support
+    startDate: "2027-04-22"
+  - endDate: "2028-11-21"
+    name: Extended update support Term 2
+    startDate: "2027-10-22"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.20"
+---
+package: odr-hub-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "4.12"
+  phases:
+  - endDate: "2023-09-21"
+    name: Full support
+    startDate: "2023-01-31"
+  - endDate: "2024-07-17"
+    name: Maintenance support
+    startDate: "2023-09-22"
+  - endDate: "2025-01-17"
+    name: Extended update support
+    startDate: "2024-07-18"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+- name: "4.13"
+  phases:
+  - endDate: "2024-02-08"
+    name: Full support
+    startDate: "2023-06-21"
+  - endDate: "2024-11-17"
+    name: Maintenance support
+    startDate: "2024-02-09"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.13"
+- name: "4.14"
+  phases:
+  - endDate: "2024-06-18"
+    name: Full support
+    startDate: "2023-11-08"
+  - endDate: "2025-05-01"
+    name: Maintenance support
+    startDate: "2024-06-19"
+  - endDate: "2025-10-31"
+    name: Extended update support
+    startDate: "2025-05-02"
+  - endDate: "2026-10-31"
+    name: Extended update support Term 2
+    startDate: "2025-11-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.14"
+- name: "4.15"
+  phases:
+  - endDate: "2024-10-16"
+    name: Full support
+    startDate: "2024-03-19"
+  - endDate: "2025-08-27"
+    name: Maintenance support
+    startDate: "2024-10-17"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.15"
+- name: "4.16"
+  phases:
+  - endDate: "2025-01-30"
+    name: Full support
+    startDate: "2024-07-17"
+  - endDate: "2025-12-27"
+    name: Maintenance support
+    startDate: "2025-01-31"
+  - endDate: "2026-06-27"
+    name: Extended update support
+    startDate: "2025-12-28"
+  - endDate: "2027-06-27"
+    name: Extended update support Term 2
+    startDate: "2026-06-28"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.16"
+- name: "4.17"
+  phases:
+  - endDate: "2025-06-11"
+    name: Full support
+    startDate: "2024-10-30"
+  - endDate: "2026-04-01"
+    name: Maintenance support
+    startDate: "2025-06-12"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.17"
+- name: "4.18"
+  phases:
+  - endDate: "2025-10-28"
+    name: Full support
+    startDate: "2025-03-11"
+  - endDate: "2026-08-25"
+    name: Maintenance support
+    startDate: "2025-10-29"
+  - endDate: "2027-02-25"
+    name: Extended update support
+    startDate: "2026-08-26"
+  - endDate: "2028-02-25"
+    name: Extended update support Term 2
+    startDate: "2027-02-26"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.18"
+- name: "4.19"
+  phases:
+  - endDate: "2026-02-18"
+    name: Full support
+    startDate: "2025-07-28"
+  - endDate: "2026-12-17"
+    name: Maintenance support
+    startDate: "2026-02-19"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.19"
+- name: "4.20"
+  phases:
+  - endDate: "2026-06-09"
+    name: Full support
+    startDate: "2025-11-18"
+  - endDate: "2027-04-21"
+    name: Maintenance support
+    startDate: "2026-06-10"
+  - endDate: "2027-10-21"
+    name: Extended update support
+    startDate: "2027-04-22"
+  - endDate: "2028-11-21"
+    name: Extended update support Term 2
+    startDate: "2027-10-22"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.20"
+---
+package: red-hat-hawtio-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.3"
+  phases:
+  - endDate: "2028-10-30"
+    name: Full support
+    startDate: "2025-11-01"
+  - endDate: "2029-10-30"
+    name: Maintenance support
+    startDate: "2028-10-31"
+  - endDate: "2030-10-30"
+    name: Extended life cycle support (ELS) 1
+    startDate: "2029-10-31"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+---
+package: rh-service-binding-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.3"
+  phases:
+  - endDate: "2025-08-27"
+    name: Full support
+    startDate: "2022-10-14"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.15"
+    - "4.14"
+    - "4.13"
+    - "4.12"
+---
+package: rhacs-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "3.67"
+  phases:
+  - endDate: "2022-07-15"
+    name: Full support
+    startDate: "2021-12-16"
+- name: "3.68"
+  phases:
+  - endDate: "2022-08-02"
+    name: Full support
+    startDate: "2022-02-02"
+- name: "3.69"
+  phases:
+  - endDate: "2022-09-21"
+    name: Full support
+    startDate: "2022-03-21"
+- name: "3.70"
+  phases:
+  - endDate: "2022-12-02"
+    name: Full support
+    startDate: "2022-07-04"
+- name: "3.71"
+  phases:
+  - endDate: "2023-01-25"
+    name: Full support
+    startDate: "2022-07-25"
+- name: "3.72"
+  phases:
+  - endDate: "2023-03-27"
+    name: Full support
+    startDate: "2022-09-26"
+- name: "3.73"
+  phases:
+  - endDate: "2023-06-07"
+    name: Full support
+    startDate: "2022-12-06"
+- name: "3.74"
+  phases:
+  - endDate: "2023-11-27"
+    name: Full support
+    startDate: "2023-02-27"
+- name: "4.0"
+  phases:
+  - endDate: "2023-11-03"
+    name: Full support
+    startDate: "2023-05-03"
+- name: "4.1"
+  phases:
+  - endDate: "2023-12-29"
+    name: Full support
+    startDate: "2023-06-29"
+- name: "4.2"
+  phases:
+  - endDate: "2024-03-18"
+    name: Full support
+    startDate: "2023-09-18"
+- name: "4.3"
+  phases:
+  - endDate: "2024-06-15"
+    name: Full support
+    startDate: "2023-11-15"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.11"
+    - "4.12"
+    - "4.13"
+    - "4.14"
+    - "4.15"
+- name: "4.4"
+  phases:
+  - endDate: "2024-09-28"
+    name: Full support
+    startDate: "2024-03-28"
+  - endDate: "2025-01-28"
+    name: Maintenance support
+    startDate: "2024-09-29"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.13"
+    - "4.14"
+    - "4.15"
+    - "4.16"
+- name: "4.5"
+  phases:
+  - endDate: "2025-01-24"
+    name: Full support
+    startDate: "2024-07-24"
+  - endDate: "2025-05-24"
+    name: Maintenance support
+    startDate: "2025-01-25"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+- name: "4.6"
+  phases:
+  - endDate: "2025-06-03"
+    name: Full support
+    startDate: "2024-12-03"
+  - endDate: "2025-10-03"
+    name: Maintenance support
+    startDate: "2025-06-04"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.15"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+- name: "4.7"
+  phases:
+  - endDate: "2025-09-17"
+    name: Full support
+    startDate: "2025-03-17"
+  - endDate: "2026-01-17"
+    name: Maintenance support
+    startDate: "2025-09-18"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+- name: "4.8"
+  phases:
+  - endDate: "2026-01-09"
+    name: Full support
+    startDate: "2025-07-09"
+  - endDate: "2026-05-09"
+    name: Maintenance support
+    startDate: "2026-01-10"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+- name: "4.9"
+  phases:
+  - endDate: "2026-04-30"
+    name: Full support
+    startDate: "2025-10-30"
+  - endDate: "2026-08-31"
+    name: Maintenance support
+    startDate: "2026-05-01"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+- name: "4.10"
+  phases:
+  - endDate: "2026-09-03"
+    name: Full support
+    startDate: "2026-03-03"
+  - endDate: "2027-01-04"
+    name: Maintenance support
+    startDate: "2026-09-04"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.12"
+    - "4.14"
+    - "4.16"
+    - "4.17"
+    - "4.18"
+    - "4.19"
+    - "4.20"
+    - "4.21"
+---
+package: rhpam-kogito-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "7.0"
+  phases:
+  - endDate: "2022-05-31"
+    name: Full support
+    startDate: "2018-02-28"
+  - endDate: "2024-05-31"
+    name: Maintenance support
+    startDate: "2022-06-01"
+  - endDate: "2026-05-31"
+    name: Extended life cycle support (ELS) 1
+    startDate: "2024-06-01"
+---
+package: tang-operator
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+- name: "1.0"
+  phases:
+  - endDate: "2024-04-01"
+    name: Full support
+    startDate: "2023-11-27"
+  - endDate: "2024-07-01"
+    name: Maintenance support
+    startDate: "2024-04-02"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.13"
+    - "4.14"
+- name: "1.1"
+  phases:
+  - endDate: "2025-07-01"
+    name: Full support
+    startDate: "2025-01-24"
+  - endDate: "2025-10-01"
+    name: Maintenance support
+    startDate: "2025-07-02"
+  platformCompatibility:
+  - name: openshift
+    versions:
+    - "4.17"

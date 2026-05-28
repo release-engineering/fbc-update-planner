@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
-	"sigs.k8s.io/yaml"
 )
 
 // Schema is the FBC schema identifier for operator lifecycle data.
@@ -66,22 +65,24 @@ type ValidationResult struct {
 	Reasons     []string `json:"reasons,omitempty"`
 }
 
-// GenerateFBC converts PLCC products to FBC data in the specified format ("json" or "yaml"),
-// writing valid packages to output and validation failures as JSON to logOutput.
+// GenerateFBC converts PLCC products to FBC data, writing valid packages to output
+// using the provided PackageWriter and validation failures as JSON to logOutput.
 // Returns the number of valid packages emitted.
-func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer, format string) (int, error) {
-	if format != "json" && format != "yaml" {
-		return 0, fmt.Errorf("unsupported format %q: must be \"json\" or \"yaml\"", format)
+func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer, writer PackageWriter) (int, error) {
+	if writer == nil {
+		return 0, fmt.Errorf("PackageWriter must not be nil")
 	}
 
 	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
 
 	logEnc := json.NewEncoder(logOutput)
 	for _, f := range failures {
-		logEnc.Encode(f)
+		if err := logEnc.Encode(f); err != nil {
+			return 0, fmt.Errorf("failed to write validation log: %w", err)
+		}
 	}
 
-	if err := MarshalPackages(valid, output, format); err != nil {
+	if err := writer.Write(output, valid...); err != nil {
 		return 0, err
 	}
 	return len(valid), nil
@@ -98,7 +99,7 @@ func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Packag
 
 	var failures []ValidationResult
 	alreadyLogged := make(map[string]bool)
-	validPackages := make([]*Package, 0)
+	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
 		if pkgCount[product.Package] > 1 {
 			if !alreadyLogged[product.Package] {
@@ -127,42 +128,6 @@ func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Packag
 	}
 
 	return validPackages, failures
-}
-
-// MarshalPackages writes packages to output in the specified format ("json" or "yaml").
-func MarshalPackages(packages []*Package, output io.Writer, format string) error {
-	if format != "json" && format != "yaml" {
-		return fmt.Errorf("unsupported format %q: must be \"json\" or \"yaml\"", format)
-	}
-	if format == "yaml" {
-		for i, pkg := range packages {
-			yamlBytes, err := yaml.Marshal(pkg)
-			if err != nil {
-				return fmt.Errorf("marshaling package %q: %w", pkg.Name, err)
-			}
-			if i > 0 {
-				yamlBytes = append([]byte("---\n"), yamlBytes...)
-			}
-			if _, err := output.Write(yamlBytes); err != nil {
-				return fmt.Errorf("writing package %q: %w", pkg.Name, err)
-			}
-		}
-		return nil
-	}
-
-	var v any = packages
-	if len(packages) == 1 {
-		v = packages[0]
-	}
-	jsonBytes, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling JSON: %w", err)
-	}
-	jsonBytes = append(jsonBytes, '\n')
-	if _, err := output.Write(jsonBytes); err != nil {
-		return fmt.Errorf("writing JSON: %w", err)
-	}
-	return nil
 }
 
 func newPackage(product plcc.Product) *Package {

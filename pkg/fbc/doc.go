@@ -7,6 +7,7 @@
 // filter pipeline that validates and rejects invalid entries with detailed reasons.
 //
 // Library callers should use [TranslateAndValidate] to get structured results ([]*Package
-// and []ValidationResult). [MarshalPackages] serializes packages to JSON or YAML.
-// [GenerateFBC] is a convenience wrapper that combines both steps with I/O handling.
+// and []ValidationResult). A [PackageWriter] serializes packages to a given format;
+// use [NewPackageWriter] to obtain one. [GenerateFBC] is a convenience wrapper
+// that combines both steps with I/O handling.
 package fbc

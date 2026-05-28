@@ -18,7 +18,7 @@ bin/plcc2fbc [flags] <output-file>
 
 | Flag | Description |
 |------|-------------|
-| `-o, --output <format>` | Output format: `json` or `yaml` (default: `json`) |
+| `-o, --output <format>` | Output format: `json`, `json-pretty`, or `yaml` (default: `json`) |
 | `-p, --package <names>` | Comma-separated package names to include (default: all) |
 | `-l, --log <file>` | Write operational logs to `<file>` (default: stdout) |
 | `-i, --input <file>` | Read PLCC JSON input from `<file>` instead of fetching from API |

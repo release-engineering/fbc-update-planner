@@ -124,7 +124,7 @@ func Load(path string) (*Catalog, error) {
 
 // FilterPackages removes products that have no package name, modifying the catalog in place.
 func (c *Catalog) FilterPackages() {
-	filtered := c.Data[:0]
+	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
 		if p.Package != "" {
 			filtered = append(filtered, p)
@@ -140,7 +140,7 @@ func (c *Catalog) FilterByPackageNames(names []string) {
 	for _, name := range names {
 		allowed[name] = true
 	}
-	filtered := c.Data[:0]
+	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
 		if allowed[p.Package] {
 			filtered = append(filtered, p)
