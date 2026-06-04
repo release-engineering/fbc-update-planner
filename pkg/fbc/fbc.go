@@ -83,7 +83,7 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 	}
 
 	if err := writer.Write(output, valid...); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to write packages: %w", err)
 	}
 	return len(valid), nil
 }
