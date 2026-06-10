@@ -59,14 +59,41 @@ type Phase struct {
 	EndDate   string `json:"end_date"`
 }
 
-// Fetch retrieves the product catalog from the PLCC API.
+// Fetch retrieves the product catalog from the default PLCC API endpoint.
 func Fetch() (*Catalog, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(APIURL)
+	return FetchFrom(APIURL, &http.Client{Timeout: 30 * time.Second})
+}
+
+var sleepFunc = time.Sleep
+
+// FetchFrom retrieves the product catalog from the given URL using the provided HTTP client.
+// It retries up to 3 times with exponential backoff on errors.
+func FetchFrom(url string, client *http.Client) (*Catalog, error) {
+	const maxRetries = 3
+	var lastErr error
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			// attempt 1: 60s, attempt 2: 120s
+			sleepFunc(time.Duration(60<<(attempt-1)) * time.Second)
+		}
+
+		catalog, err := fetch(url, client)
+		if err == nil {
+			return catalog, nil
+		}
+		lastErr = err
+	}
+
+	return nil, fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
+}
+
+func fetch(url string, client *http.Client) (*Catalog, error) {
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
@@ -97,9 +124,25 @@ func Load(path string) (*Catalog, error) {
 
 // FilterPackages removes products that have no package name, modifying the catalog in place.
 func (c *Catalog) FilterPackages() {
-	filtered := c.Data[:0]
+	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
 		if p.Package != "" {
+			filtered = append(filtered, p)
+		}
+	}
+	c.Data = filtered
+}
+
+// FilterByPackageNames keeps only products whose package name is in the provided list,
+// modifying the catalog in place.
+func (c *Catalog) FilterByPackageNames(names []string) {
+	allowed := make(map[string]bool, len(names))
+	for _, name := range names {
+		allowed[name] = true
+	}
+	filtered := make([]Product, 0, len(c.Data))
+	for _, p := range c.Data {
+		if allowed[p.Package] {
 			filtered = append(filtered, p)
 		}
 	}
@@ -119,12 +162,16 @@ func (c *Catalog) SortByPackage() {
 }
 
 // Dump writes the catalog products to a JSON file.
-func (c *Catalog) Dump(path string) error {
+func (c *Catalog) Dump(path string) (err error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")

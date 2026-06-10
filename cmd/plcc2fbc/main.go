@@ -17,67 +17,150 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
-const packageNotFound = 1
+var errPackageNotFound = errors.New("no FBC data generated")
 
 func main() {
-	var outputPath string
-	var plccDumpPath string
+	if err := run(); err != nil {
+		if errors.Is(err, errPackageNotFound) {
+			os.Exit(2)
+		}
+		log.Fatal(err)
+	}
+}
+
+func run() (err error) {
+	var format string
+	var logPath string
+	var packages string
+	var dumpPLCC bool
 	var inputPath string
 
-	flag.StringVar(&outputPath, "o", "", "write FBC data to a file instead of stdout")
-	flag.StringVar(&inputPath, "i", "", "read PLCC JSON input from a file instead of fetching from API")
-	flag.StringVar(&plccDumpPath, "dump-plcc", "", "dump filtered PLCC JSON to a file")
+	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
+	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file; parent directory must exist (default: stdout)")
+	flag.StringVarP(&packages, "package", "p", "", "comma-separated package names to process (default: all)")
+	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
+	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-file>\n\nThe parent directory of <output-file> must already exist.\n\nFlags:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
-	output := os.Stdout
-	if outputPath != "" {
-		f, err := os.Create(outputPath)
-		if err != nil {
-			log.Fatalf("failed to create output file: %v", err)
+	var logWriter io.Writer = os.Stdout
+	if logPath != "" {
+		if err := validateOutputPath(logPath); err != nil {
+			return fmt.Errorf("invalid log path: %w", err)
 		}
-		defer f.Close()
-		output = f
+		lf, err := os.Create(logPath)
+		if err != nil {
+			return fmt.Errorf("failed to create log file: %w", err)
+		}
+		defer func() { _ = lf.Close() }()
+		logWriter = lf
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logWriter, nil)))
+
+	if flag.NArg() != 1 {
+		flag.Usage()
+		return fmt.Errorf("missing output file")
+	}
+	writePath := flag.Arg(0)
+	if err := validateOutputPath(writePath); err != nil {
+		return fmt.Errorf("invalid output path: %w", err)
+	}
+
+	writer, err := fbc.NewPackageWriter(format)
+	if err != nil {
+		slog.Error("invalid output format", "flag", "-o", "value", format, "allowed", "json,json-pretty,yaml")
+		return err
 	}
 
 	var catalog *plcc.Catalog
-	var err error
 	if inputPath != "" {
 		catalog, err = plcc.Load(inputPath)
 	} else {
 		catalog, err = plcc.Fetch()
 	}
 	if err != nil {
-		log.Fatalf("failed to load PLCC data: %v", err)
+		slog.Error("failed to load PLCC data", "error", err)
+		return err
 	}
 
-	log.Printf("fetched %d products from PLCC", catalog.Len())
-	catalog.FilterPackages()
-	log.Printf("found %d packages", catalog.Len())
+	slog.Info("fetched products from PLCC", "count", catalog.Len())
+	if packages != "" {
+		var names []string
+		for _, name := range strings.Split(packages, ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+		catalog.FilterByPackageNames(names)
+	} else {
+		catalog.FilterPackages()
+	}
+	slog.Info("filtered packages", "count", catalog.Len())
 	catalog.SortByPackage()
 
-	if plccDumpPath != "" {
-		if err := catalog.Dump(plccDumpPath); err != nil {
-			log.Fatalf("failed to write PLCC dump: %v", err)
+	if dumpPLCC {
+		if err := catalog.Dump(writePath); err != nil {
+			slog.Error("failed to write PLCC dump", "path", writePath, "error", err)
+			return err
 		}
-		log.Printf("wrote %d PLCC entries to %s", catalog.Len(), plccDumpPath)
-		return
+		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
+		return nil
 	}
 
-	blobCount, err := fbc.GenerateFBC(catalog.Data, output, os.Stderr)
+	f, err := os.Create(writePath)
 	if err != nil {
-		log.Fatalf("failed to generate FBC: %v", err)
+		slog.Error("failed to create output file", "path", writePath, "error", err)
+		return err
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing output file %s: %w", writePath, cerr)
+		}
+	}()
+
+	blobCount, err := fbc.GenerateFBC(catalog.Data, f, os.Stderr, writer)
+	if err != nil {
+		slog.Error("failed to generate FBC", "error", err)
+		return err
 	}
 	if blobCount == 0 {
-		log.Print("no valid FBC data found")
-		os.Exit(packageNotFound)
+		slog.Warn("no FBC data generated")
+		return errPackageNotFound
 	}
-	log.Printf("wrote %d FBC blobs", blobCount)
+	slog.Info("wrote FBC data", "count", blobCount, "path", writePath, "format", format)
+	return nil
+}
+
+func validateOutputPath(path string) error {
+	dir := filepath.Dir(path)
+	info, err := os.Stat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("parent directory %q does not exist", dir)
+	}
+	if err != nil {
+		return fmt.Errorf("cannot access parent directory %q: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("parent path %q is not a directory", dir)
+	}
+	return nil
 }

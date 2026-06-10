@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
-	"sigs.k8s.io/yaml"
 )
 
 // Schema is the FBC schema identifier for operator lifecycle data.
@@ -66,9 +65,72 @@ type ValidationResult struct {
 	Reasons     []string `json:"reasons,omitempty"`
 }
 
-// NewPackage creates an FBC Package from a PLCC product, performing pure translation
-// without validation. Unparseable timestamps are stored as empty strings.
-func NewPackage(product plcc.Product) *Package {
+// GenerateFBC converts PLCC products to FBC data, writing valid packages to output
+// using the provided PackageWriter and validation failures as JSON to logOutput.
+// Returns the number of valid packages emitted.
+func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer, writer PackageWriter) (int, error) {
+	if writer == nil {
+		return 0, fmt.Errorf("PackageWriter must not be nil")
+	}
+
+	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
+
+	logEnc := json.NewEncoder(logOutput)
+	for _, f := range failures {
+		if err := logEnc.Encode(f); err != nil {
+			return 0, fmt.Errorf("failed to write validation log: %w", err)
+		}
+	}
+
+	if err := writer.Write(output, valid...); err != nil {
+		return 0, fmt.Errorf("failed to write packages: %w", err)
+	}
+	return len(valid), nil
+}
+
+// TranslateAndValidate translates PLCC products to FBC packages and validates them through
+// the provided filter pipeline. Returns the valid packages and a list of validation
+// failures.
+func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Package, []ValidationResult) {
+	pkgCount := make(map[string]int)
+	for _, p := range products {
+		pkgCount[p.Package]++
+	}
+
+	var failures []ValidationResult
+	alreadyLogged := make(map[string]bool)
+	validPackages := make([]*Package, 0, len(products))
+	for _, product := range products {
+		if pkgCount[product.Package] > 1 {
+			if !alreadyLogged[product.Package] {
+				failures = append(failures, ValidationResult{
+					PackageName: product.Package,
+					Valid:       false,
+					Reasons:     []string{"package appears in multiple products"},
+				})
+				alreadyLogged[product.Package] = true
+			}
+			continue
+		}
+
+		pkg := newPackage(product)
+		reasons := pkg.Filter(filters...)
+		if len(reasons) > 0 {
+			failures = append(failures, ValidationResult{
+				PackageName: product.Package,
+				Valid:       false,
+				Reasons:     reasons,
+			})
+			continue
+		}
+
+		validPackages = append(validPackages, pkg)
+	}
+
+	return validPackages, failures
+}
+
+func newPackage(product plcc.Product) *Package {
 	pkg := &Package{
 		Schema: Schema,
 		Name:   product.Package,
@@ -121,65 +183,6 @@ func translatePhase(ph plcc.Phase) Phase {
 		end = plcc.FormatDate(t)
 	}
 	return Phase{Name: ph.Name, StartDate: start, EndDate: end}
-}
-
-// GenerateFBC converts PLCC products to FBC YAML, writing valid packages to output
-// and validation failures as JSON to logOutput. Returns the number of emitted FBC blobs.
-func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer) (int, error) {
-	pipeline := DefaultFilters()
-
-	pkgCount := make(map[string]int)
-	for _, p := range products {
-		pkgCount[p.Package]++
-	}
-
-	logEnc := json.NewEncoder(logOutput)
-	alreadyLogged := make(map[string]bool)
-	blobCount := 0
-	for _, product := range products {
-		if pkgCount[product.Package] > 1 {
-			if !alreadyLogged[product.Package] {
-				logEnc.Encode(ValidationResult{
-					PackageName: product.Package,
-					Valid:       false,
-					Reasons:     []string{"package appears in multiple products"},
-				})
-				alreadyLogged[product.Package] = true
-			}
-			continue
-		}
-
-		pkg := NewPackage(product)
-		reasons := pkg.Filter(pipeline...)
-		if len(reasons) > 0 {
-			logEnc.Encode(ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     reasons,
-			})
-			continue
-		}
-
-		yamlBytes, err := yaml.Marshal(pkg)
-		if err != nil {
-			logEnc.Encode(ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     []string{fmt.Sprintf("failed to marshal YAML: %v", err)},
-			})
-			continue
-		}
-
-		if blobCount > 0 {
-			yamlBytes = append([]byte("---\n"), yamlBytes...)
-		}
-		if _, err := output.Write(yamlBytes); err != nil {
-			return blobCount, fmt.Errorf("writing YAML for package %q: %w", product.Package, err)
-		}
-		blobCount++
-	}
-
-	return blobCount, nil
 }
 
 func compareMajorMinor(a, b string) int {

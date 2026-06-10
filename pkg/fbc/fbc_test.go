@@ -43,7 +43,7 @@ func TestNewPackage(t *testing.T) {
 		},
 	}
 
-	pkg := NewPackage(product)
+	pkg := newPackage(product)
 
 	if pkg.Schema != Schema {
 		t.Errorf("schema = %q, want %q", pkg.Schema, Schema)
@@ -77,7 +77,7 @@ func TestNewPackageUnparseableTimestamp(t *testing.T) {
 		}},
 	}
 
-	pkg := NewPackage(product)
+	pkg := newPackage(product)
 	ph := pkg.Versions[0].Phases[0]
 
 	if ph.StartDate != "" {

@@ -13,14 +13,16 @@ make build
 ## Run
 
 ```shell
-bin/plcc2fbc [flags]
+bin/plcc2fbc [flags] <output-file>
 ```
 
 | Flag | Description |
 |------|-------------|
-| `-o <file>` | Write FBC YAML to `<file>` instead of stdout |
-| `-i <file>` | Read PLCC JSON input from `<file>` instead of fetching from API |
-| `-dump-plcc <file>` | Write filtered PLCC JSON dump to `<file>` |
+| `-o, --output <format>` | Output format: `json`, `json-pretty`, or `yaml` (default: `json`) |
+| `-p, --package <names>` | Comma-separated package names to include (default: all) |
+| `-l, --log <file>` | Write operational logs to `<file>` (default: stdout) |
+| `-i, --input <file>` | Read PLCC JSON input from `<file>` instead of fetching from API |
+| `--dump-plcc` | Dump filtered PLCC JSON instead of generating FBC |
 
 ## Generate FBC snapshot
 
