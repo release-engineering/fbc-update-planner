@@ -22,16 +22,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"sort"
 	"time"
 )
 
 // APIURL is the Red Hat Product Life Cycle API endpoint.
 const APIURL = "https://access.redhat.com/product-life-cycles/api/v2/products"
-
-// MajorMinorRegex matches version strings in MAJOR.MINOR format (e.g. "4.12").
-var MajorMinorRegex = regexp.MustCompile(`^\d+\.\d+$`)
 
 // Catalog holds the product lifecycle data returned by the PLCC API.
 type Catalog struct {
@@ -40,9 +36,11 @@ type Catalog struct {
 
 // Product represents a software product with its lifecycle versions.
 type Product struct {
-	Name     string    `json:"name"`
-	Package  string    `json:"package"`
-	Versions []Version `json:"versions"`
+	Name           string    `json:"name"`
+	Package        string    `json:"package"`
+	Versions       []Version `json:"versions"`
+	ReleaseCadence string    `json:"release_cadence"`
+	IsOperator     bool      `json:"is_operator"`
 }
 
 // Version represents a product version with its lifecycle phases and platform compatibility.
@@ -50,13 +48,16 @@ type Version struct {
 	Name                   string  `json:"name"`
 	Phases                 []Phase `json:"phases"`
 	OpenShiftCompatibility string  `json:"openshift_compatibility"`
+	Tier                   string  `json:"tier"`
 }
 
 // Phase represents a lifecycle phase with start and end dates (ISO8601 timestamps).
 type Phase struct {
-	Name      string `json:"name"`
-	StartDate string `json:"start_date"`
-	EndDate   string `json:"end_date"`
+	Name            string `json:"name"`
+	StartDate       string `json:"start_date"`
+	EndDate         string `json:"end_date"`
+	StartDateFormat string `json:"start_date_format"`
+	EndDateFormat   string `json:"end_date_format"`
 }
 
 // Fetch retrieves the product catalog from the default PLCC API endpoint.

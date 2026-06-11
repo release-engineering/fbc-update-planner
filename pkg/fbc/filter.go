@@ -18,10 +18,12 @@ package fbc
 
 import (
 	"fmt"
+	"regexp"
 	"time"
-
-	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
+
+// REQ-VER-01: Version numbers must be validated against strict semver (<major>.<minor>).
+var MajorMinorRegex = regexp.MustCompile(`^\d+\.\d+$`)
 
 // Filter is a pipeline callback that can mutate a Package, validate it, or both.
 // A non-empty return means the package should be rejected.
@@ -87,13 +89,13 @@ func FilterPointInTimePhases(p *Package) []string {
 				if pt.index < first.index && ph.EndDate == first.phase.StartDate {
 					continue
 				}
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: point-in-time (start unset, end %s) not aligned with first phase start (%s)",
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-03: version %q phase %q: point-in-time (start unset, end %s) not aligned with first phase start (%s)",
 					v.Name, ph.Name, ph.EndDate, first.phase.StartDate))
 			} else {
 				if pt.index > last.index && ph.StartDate == last.phase.EndDate {
 					continue
 				}
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: point-in-time (start %s, end unset) not aligned with last phase end (%s)",
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-03: version %q phase %q: point-in-time (start %s, end unset) not aligned with last phase end (%s)",
 					v.Name, ph.Name, ph.StartDate, last.phase.EndDate))
 			}
 		}
@@ -102,6 +104,7 @@ func FilterPointInTimePhases(p *Package) []string {
 }
 
 // FilterIncompletePhases removes phases where either date is empty from all versions.
+// REQ-DATE-03: API dates must cleanly parse as valid date values.
 func FilterIncompletePhases(p *Package) []string {
 	for i := range p.Versions {
 		filtered := p.Versions[i].Phases[:0]
@@ -118,17 +121,18 @@ func FilterIncompletePhases(p *Package) []string {
 // ValidateHasVersions checks that the package has at least one version.
 func ValidateHasVersions(p *Package) []string {
 	if len(p.Versions) == 0 {
-		return []string{"package has no versions"}
+		return []string{"REQ-DATE-03: package has no versions"}
 	}
 	return nil
 }
 
 // ValidateVersionNames checks that all version names match MAJOR.MINOR format.
+// REQ-VER-01: Version numbers must be validated against strict semver (<major>.<minor>).
 func ValidateVersionNames(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if !plcc.MajorMinorRegex.MatchString(v.Name) {
-			reasons = append(reasons, fmt.Sprintf("version name %q is not MAJOR.MINOR", v.Name))
+		if !MajorMinorRegex.MatchString(v.Name) {
+			reasons = append(reasons, fmt.Sprintf("REQ-VER-01: version name %q is not MAJOR.MINOR", v.Name))
 		}
 	}
 	return reasons
@@ -136,36 +140,38 @@ func ValidateVersionNames(p *Package) []string {
 
 // ValidatePhases checks that all phases have non-empty dates, end > start, and
 // consecutive phases are continuous (each starts one day after the previous ends).
+// REQ-DATE-01: Dates must not accept free-form text; must be machine-parseable.
+// REQ-DATE-02: All dates must resolve to static, absolute values.
 func ValidatePhases(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		if len(v.Phases) == 0 {
-			reasons = append(reasons, fmt.Sprintf("version %q: no phases", v.Name))
+			reasons = append(reasons, fmt.Sprintf("REQ-DATE-01: version %q: no phases", v.Name))
 			continue
 		}
 
 		var validPhases []Phase
 		for _, ph := range v.Phases {
 			if ph.StartDate == "" {
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: missing start date", v.Name, ph.Name))
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-01: version %q phase %q: missing start date", v.Name, ph.Name))
 				continue
 			}
 			if ph.EndDate == "" {
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: missing end date", v.Name, ph.Name))
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-01: version %q phase %q: missing end date", v.Name, ph.Name))
 				continue
 			}
 			start, err := time.Parse("2006-01-02", ph.StartDate)
 			if err != nil {
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: invalid start date format %q", v.Name, ph.Name, ph.StartDate))
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-02: version %q phase %q: invalid start date format %q", v.Name, ph.Name, ph.StartDate))
 				continue
 			}
 			end, err := time.Parse("2006-01-02", ph.EndDate)
 			if err != nil {
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: invalid end date format %q", v.Name, ph.Name, ph.EndDate))
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-02: version %q phase %q: invalid end date format %q", v.Name, ph.Name, ph.EndDate))
 				continue
 			}
 			if !end.After(start) {
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: end (%s) is not after start (%s)", v.Name, ph.Name, ph.EndDate, ph.StartDate))
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-01: version %q phase %q: end (%s) is not after start (%s)", v.Name, ph.Name, ph.EndDate, ph.StartDate))
 				continue
 			}
 			validPhases = append(validPhases, ph)
@@ -176,7 +182,7 @@ func ValidatePhases(p *Package) []string {
 			currStart, _ := time.Parse("2006-01-02", validPhases[i].StartDate)
 			expectedStart := prevEnd.AddDate(0, 0, 1)
 			if !currStart.Equal(expectedStart) {
-				reasons = append(reasons, fmt.Sprintf("version %q phase %q: start (%s) must be one day after previous phase %q end (%s)",
+				reasons = append(reasons, fmt.Sprintf("REQ-DATE-01: version %q phase %q: start (%s) must be one day after previous phase %q end (%s)",
 					v.Name, validPhases[i].Name, validPhases[i].StartDate, validPhases[i-1].Name, validPhases[i-1].EndDate))
 			}
 		}
@@ -185,6 +191,7 @@ func ValidatePhases(p *Package) []string {
 }
 
 // ValidateOCPCompatibility checks that all OCP platform versions match MAJOR.MINOR format.
+// REQ-FIELD-02: Aligned OCP version via existing openshift_compatibility field.
 func ValidateOCPCompatibility(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
@@ -193,8 +200,8 @@ func ValidateOCPCompatibility(p *Package) []string {
 				continue
 			}
 			for _, ver := range platform.Versions {
-				if !plcc.MajorMinorRegex.MatchString(ver) {
-					reasons = append(reasons, fmt.Sprintf("version %q: OCP compatibility %q is not MAJOR.MINOR", v.Name, ver))
+				if !MajorMinorRegex.MatchString(ver) {
+					reasons = append(reasons, fmt.Sprintf("REQ-FIELD-02: version %q: OCP compatibility %q is not MAJOR.MINOR", v.Name, ver))
 				}
 			}
 		}
