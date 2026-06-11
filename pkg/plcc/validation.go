@@ -329,7 +329,7 @@ func ValidateVersionNames(p Product) []string {
 func ValidatePlatformAlignedPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierAligned {
+		if versionTier(v) != TierAligned {
 			continue
 		}
 		required := []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
@@ -347,7 +347,7 @@ func ValidatePlatformAlignedPhases(p Product) []string {
 func ValidatePlatformAlignedOCP(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierAligned {
+		if versionTier(v) != TierAligned {
 			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -364,7 +364,7 @@ func ValidatePlatformAlignedOCP(p Product) []string {
 func ValidatePlatformAgnosticPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierAgnostic {
+		if versionTier(v) != TierAgnostic {
 			continue
 		}
 		for _, name := range []string{PhaseFullSupport, PhaseMaintenance} {
@@ -383,7 +383,7 @@ func ValidatePlatformAgnosticPhases(p Product) []string {
 func ValidatePlatformAgnosticEUSPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierAgnostic || !isVersionEUSAligned(v) {
+		if versionTier(v) != TierAgnostic || !isVersionEUSAligned(v) {
 			continue
 		}
 		for _, eus := range eusPhases {
@@ -401,7 +401,7 @@ func ValidatePlatformAgnosticEUSPhases(p Product) []string {
 func ValidatePlatformAgnosticEUSOCP(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierAgnostic || !isVersionEUSAligned(v) {
+		if versionTier(v) != TierAgnostic || !isVersionEUSAligned(v) {
 			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -418,7 +418,7 @@ func ValidatePlatformAgnosticEUSOCP(p Product) []string {
 func ValidateRollingStreamPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierRolling {
+		if versionTier(v) != TierRolling {
 			continue
 		}
 		if !hasPhaseWithParseableDates(v, PhaseFullSupport) {
@@ -434,7 +434,7 @@ func ValidateRollingStreamPhases(p Product) []string {
 func ValidateRollingStreamForbiddenPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierRolling {
+		if versionTier(v) != TierRolling {
 			continue
 		}
 		phaseNames := phaseNameSet(v)
@@ -473,7 +473,7 @@ func ValidateTierSelected(p Product) []string {
 	}
 	var reasons []string
 	for _, v := range p.Versions {
-		tier := strings.TrimSpace(v.Tier)
+		tier := versionTier(v)
 		if tier == "" || tier == "N/A" || tier == "-" {
 			reasons = append(reasons, fmt.Sprintf("REQ-TIER-ALL-02: version %q: lifecycle tier not selected (tier=%q)", v.Name, v.Tier))
 		}
@@ -487,7 +487,7 @@ func ValidateTierSelected(p Product) []string {
 func ValidateOCPFormat(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier != TierAligned {
+		if versionTier(v) != TierAligned {
 			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -570,7 +570,7 @@ func ValidatePhaseEndAfterStart(p Product) []string {
 func ValidateOCPFormatAll(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if v.Tier == TierAligned {
+		if versionTier(v) == TierAligned {
 			continue // already checked by ValidateOCPFormat (REQ-FIELD-02)
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -585,6 +585,10 @@ func ValidateOCPFormatAll(p Product) []string {
 		}
 	}
 	return reasons
+}
+
+func versionTier(v Version) string {
+	return strings.TrimSpace(v.Tier)
 }
 
 func phaseNameSet(v Version) map[string]bool {
