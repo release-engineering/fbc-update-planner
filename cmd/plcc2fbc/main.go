@@ -30,6 +30,7 @@ import (
 
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
+	"github.com/release-engineering/fbc-update-planner/pkg/report"
 )
 
 var errPackageNotFound = errors.New("no FBC data generated")
@@ -49,17 +50,28 @@ func run() (err error) {
 	var packages string
 	var dumpPLCC bool
 	var inputPath string
+	var strict bool
+	var validatorsFlag string
+	var listValidators bool
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
 	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file; parent directory must exist (default: stdout)")
 	flag.StringVarP(&packages, "package", "p", "", "comma-separated package names to process (default: all)")
 	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
+	flag.BoolVar(&strict, "strict", false, "treat PLCC validation warnings as errors and filter out failing packages")
+	flag.StringVar(&validatorsFlag, "validators", "all", "comma-separated list of validators to run (labels, groups: all, syntax, semantic)")
+	flag.BoolVar(&listValidators, "list-validators", false, "list available validators and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-file>\n\nThe parent directory of <output-file> must already exist.\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if listValidators {
+		fmt.Print(plcc.ListValidators())
+		return nil
+	}
 
 	var logWriter io.Writer = os.Stdout
 	if logPath != "" {
@@ -116,6 +128,51 @@ func run() (err error) {
 	}
 	slog.Info("filtered packages", "count", catalog.Len())
 	catalog.SortByPackage()
+
+	// Run catalog-level PLCC validators (cross-product checks).
+	if catalogWarnings := catalog.Validate(); len(catalogWarnings) > 0 {
+		_ = report.LogResults(os.Stderr, report.ValidationResult{
+			PackageName: "",
+			Valid:       true,
+			Reasons:     catalogWarnings,
+		})
+	}
+
+	// Resolve which validators to run.
+	var validatorNames []string
+	for _, name := range strings.Split(validatorsFlag, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			validatorNames = append(validatorNames, name)
+		}
+	}
+	validators, err := plcc.LookupValidators(validatorNames...)
+	if err != nil {
+		slog.Error("invalid --validators flag", "error", err)
+		return err
+	}
+
+	// Run per-product PLCC validators. With --strict, failing packages are filtered out.
+	var filtered []plcc.Product
+	for _, product := range catalog.Data {
+		warnings := plcc.ValidateProduct(product, validators...)
+		if len(warnings) == 0 {
+			filtered = append(filtered, product)
+			continue
+		}
+		_ = report.LogResults(os.Stderr, report.ValidationResult{
+			PackageName: product.Package,
+			Valid:       !strict,
+			Reasons:     warnings,
+		})
+		if !strict {
+			filtered = append(filtered, product)
+		}
+	}
+	if strict {
+		slog.Info("strict PLCC validation", "passed", len(filtered), "filtered", len(catalog.Data)-len(filtered))
+		catalog.Data = filtered
+	}
 
 	if dumpPLCC {
 		if err := catalog.Dump(writePath); err != nil {
