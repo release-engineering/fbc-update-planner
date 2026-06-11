@@ -17,7 +17,6 @@ limitations under the License.
 package fbc
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -25,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
+	"github.com/release-engineering/fbc-update-planner/pkg/report"
 )
 
 // Schema is the FBC schema identifier for operator lifecycle data.
@@ -57,14 +57,6 @@ type Platform struct {
 	Versions []string `json:"versions"`
 }
 
-// ValidationResult records the outcome of validating a package or version.
-type ValidationResult struct {
-	PackageName string   `json:"packageName"`
-	Version     string   `json:"version,omitempty"`
-	Valid       bool     `json:"valid"`
-	Reasons     []string `json:"reasons,omitempty"`
-}
-
 // GenerateFBC converts PLCC products to FBC data, writing valid packages to output
 // using the provided PackageWriter and validation failures as JSON to logOutput.
 // Returns the number of valid packages emitted.
@@ -75,11 +67,8 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 
 	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
 
-	logEnc := json.NewEncoder(logOutput)
-	for _, f := range failures {
-		if err := logEnc.Encode(f); err != nil {
-			return 0, fmt.Errorf("failed to write validation log: %w", err)
-		}
+	if err := report.LogResults(logOutput, failures...); err != nil {
+		return 0, err
 	}
 
 	if err := writer.Write(output, valid...); err != nil {
@@ -91,22 +80,23 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 // TranslateAndValidate translates PLCC products to FBC packages and validates them through
 // the provided filter pipeline. Returns the valid packages and a list of validation
 // failures.
-func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Package, []ValidationResult) {
+func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Package, []report.ValidationResult) {
 	pkgCount := make(map[string]int)
 	for _, p := range products {
 		pkgCount[p.Package]++
 	}
 
-	var failures []ValidationResult
+	var failures []report.ValidationResult
 	alreadyLogged := make(map[string]bool)
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
+		// REQ-VAL-01: Prevent duplicate operator release entries.
 		if pkgCount[product.Package] > 1 {
 			if !alreadyLogged[product.Package] {
-				failures = append(failures, ValidationResult{
+				failures = append(failures, report.ValidationResult{
 					PackageName: product.Package,
 					Valid:       false,
-					Reasons:     []string{"package appears in multiple products"},
+					Reasons:     []string{"REQ-VAL-01: package appears in multiple products"},
 				})
 				alreadyLogged[product.Package] = true
 			}
@@ -116,7 +106,7 @@ func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Packag
 		pkg := newPackage(product)
 		reasons := pkg.Filter(filters...)
 		if len(reasons) > 0 {
-			failures = append(failures, ValidationResult{
+			failures = append(failures, report.ValidationResult{
 				PackageName: product.Package,
 				Valid:       false,
 				Reasons:     reasons,
