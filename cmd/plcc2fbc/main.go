@@ -131,11 +131,13 @@ func run() (err error) {
 
 	// Run catalog-level PLCC validators (cross-product checks).
 	if catalogWarnings := catalog.Validate(); len(catalogWarnings) > 0 {
-		_ = report.LogResults(os.Stderr, report.ValidationResult{
+		if err := report.LogResults(os.Stderr, report.ValidationResult{
 			PackageName: "",
 			Valid:       true,
 			Reasons:     catalogWarnings,
-		})
+		}); err != nil {
+			slog.Error("failed to write catalog validation warnings", "error", err)
+		}
 	}
 
 	// Resolve which validators to run.
@@ -160,11 +162,13 @@ func run() (err error) {
 			filtered = append(filtered, product)
 			continue
 		}
-		_ = report.LogResults(os.Stderr, report.ValidationResult{
+		if err := report.LogResults(os.Stderr, report.ValidationResult{
 			PackageName: product.Package,
 			Valid:       !strict,
 			Reasons:     warnings,
-		})
+		}); err != nil {
+			slog.Error("failed to write validation warnings", "package", product.Package, "error", err)
+		}
 		if !strict {
 			filtered = append(filtered, product)
 		}
