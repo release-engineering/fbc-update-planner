@@ -65,7 +65,7 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 		return 0, fmt.Errorf("PackageWriter must not be nil")
 	}
 
-	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
+	valid, failures := Translate(products, DefaultFilters()...)
 
 	if err := report.LogResults(logOutput, failures...); err != nil {
 		return 0, err
@@ -77,32 +77,13 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 	return len(valid), nil
 }
 
-// TranslateAndValidate translates PLCC products to FBC packages and validates them through
-// the provided filter pipeline. Returns the valid packages and a list of validation
-// failures.
-func TranslateAndValidate(products []plcc.Product, filters ...Filter) ([]*Package, []report.ValidationResult) {
-	pkgCount := make(map[string]int)
-	for _, p := range products {
-		pkgCount[p.Package]++
-	}
-
+// Translate converts PLCC products to FBC packages, running each through the
+// provided filter pipeline. Filters may mutate packages (e.g., drop incomplete
+// phases) or reject them. Returns the valid packages and a list of rejections.
+func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report.ValidationResult) {
 	var failures []report.ValidationResult
-	alreadyLogged := make(map[string]bool)
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
-		// REQ-VAL-01: Prevent duplicate operator release entries.
-		if pkgCount[product.Package] > 1 {
-			if !alreadyLogged[product.Package] {
-				failures = append(failures, report.ValidationResult{
-					PackageName: product.Package,
-					Valid:       false,
-					Reasons:     []string{"REQ-VAL-01: package appears in multiple products"},
-				})
-				alreadyLogged[product.Package] = true
-			}
-			continue
-		}
-
 		pkg := newPackage(product)
 		reasons := pkg.Filter(filters...)
 		if len(reasons) > 0 {
