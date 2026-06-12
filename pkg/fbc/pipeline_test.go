@@ -25,7 +25,7 @@ import (
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
-func TestTranslateAndValidate(t *testing.T) {
+func TestTranslate(t *testing.T) {
 	products := []plcc.Product{
 		{
 			Name:    "Valid Product",
@@ -38,8 +38,6 @@ func TestTranslateAndValidate(t *testing.T) {
 				},
 			}},
 		},
-		{Name: "Dup A", Package: "dup-pkg", Versions: []plcc.Version{{Name: "1.0"}}},
-		{Name: "Dup B", Package: "dup-pkg", Versions: []plcc.Version{{Name: "2.0"}}},
 		{
 			Name:    "Bad Version",
 			Package: "bad-pkg",
@@ -48,38 +46,36 @@ func TestTranslateAndValidate(t *testing.T) {
 				Phases: []plcc.Phase{{Name: "GA", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"}},
 			}},
 		},
+		{
+			Name:    "Incomplete Phases",
+			Package: "incomplete-pkg",
+			Versions: []plcc.Version{{
+				Name: "1.0",
+				Phases: []plcc.Phase{
+					{Name: "GA", StartDate: "N/A", EndDate: "2025-01-01T00:00:00.000Z"},
+					{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+				},
+			}},
+		},
 	}
 
-	valid, failures := TranslateAndValidate(products, DefaultFilters()...)
+	valid, failures := Translate(products, DefaultFilters()...)
 
-	if len(valid) != 1 {
-		t.Fatalf("got %d valid packages, want 1", len(valid))
+	if len(failures) != 0 {
+		t.Fatalf("got %d failures, want 0; failures: %v", len(failures), failures)
+	}
+	if len(valid) != 3 {
+		t.Fatalf("got %d valid packages, want 3", len(valid))
 	}
 	if valid[0].Name != "valid-pkg" {
-		t.Errorf("valid package name = %q, want %q", valid[0].Name, "valid-pkg")
+		t.Errorf("valid[0] package name = %q, want %q", valid[0].Name, "valid-pkg")
 	}
-
-	if len(failures) != 2 {
-		t.Fatalf("got %d failures, want 2", len(failures))
+	if valid[1].Name != "bad-pkg" {
+		t.Errorf("valid[1] package name = %q, want %q", valid[1].Name, "bad-pkg")
 	}
-
-	dupFound, badFound := false, false
-	for _, f := range failures {
-		if f.PackageName == "dup-pkg" {
-			dupFound = true
-		}
-		if f.PackageName == "bad-pkg" {
-			badFound = true
-		}
-		if f.Valid {
-			t.Errorf("failure for %q has Valid=true, want false", f.PackageName)
-		}
-	}
-	if !dupFound {
-		t.Error("expected failure for duplicate package \"dup-pkg\"")
-	}
-	if !badFound {
-		t.Error("expected failure for invalid version in \"bad-pkg\"")
+	// incomplete-pkg: GA phase (N/A start) should be stripped by FilterIncompletePhases
+	if len(valid[2].Versions[0].Phases) != 1 {
+		t.Errorf("incomplete-pkg: got %d phases, want 1 (GA should be stripped)", len(valid[2].Versions[0].Phases))
 	}
 }
 
