@@ -676,20 +676,20 @@ func isEUSPhase(name string) bool {
 
 func isVersionEUSAligned(v Version) bool {
 	for _, ph := range v.Phases {
-		if isEUSPhase(ph.Name) && hasParseableDates(ph) {
+		if isEUSPhase(ph.Name) && hasAnyParseableDate(ph) {
 			return true
 		}
 	}
 	return false
 }
 
-func hasParseableDates(ph Phase) bool {
+func hasAnyParseableDate(ph Phase) bool {
 	return isParseableTimestamp(ph.StartDate) || isParseableTimestamp(ph.EndDate)
 }
 
 func hasPhaseWithParseableDates(v Version, phaseName string) bool {
 	for _, ph := range v.Phases {
-		if ph.Name == phaseName && hasParseableDates(ph) {
+		if ph.Name == phaseName && hasAnyParseableDate(ph) {
 			return true
 		}
 	}

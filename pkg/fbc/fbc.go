@@ -80,6 +80,8 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 // Translate converts PLCC products to FBC packages, running each through the
 // provided filter pipeline. Filters may mutate packages (e.g., drop incomplete
 // phases) or reject them. Returns the valid packages and a list of rejections.
+// Callers should run Catalog.Validate before calling Translate for cross-product
+// checks such as duplicate package detection.
 func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report.ValidationResult) {
 	var failures []report.ValidationResult
 	validPackages := make([]*Package, 0, len(products))
