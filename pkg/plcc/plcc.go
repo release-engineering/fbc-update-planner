@@ -135,19 +135,29 @@ func (c *Catalog) FilterPackages() {
 }
 
 // FilterByPackageNames keeps only products whose package name is in the provided list,
-// modifying the catalog in place.
-func (c *Catalog) FilterByPackageNames(names []string) {
+// modifying the catalog in place. It returns the names that were not found.
+func (c *Catalog) FilterByPackageNames(names []string) []string {
 	allowed := make(map[string]bool, len(names))
 	for _, name := range names {
 		allowed[name] = true
 	}
-	filtered := make([]Product, 0, len(c.Data))
+	found := make(map[string]bool, len(names))
+	filtered := make([]Product, 0, len(names))
 	for _, p := range c.Data {
 		if allowed[p.Package] {
 			filtered = append(filtered, p)
+			found[p.Package] = true
 		}
 	}
 	c.Data = filtered
+
+	var notFound []string
+	for _, name := range names {
+		if !found[name] {
+			notFound = append(notFound, name)
+		}
+	}
+	return notFound
 }
 
 // Len returns the number of products currently in the catalog.

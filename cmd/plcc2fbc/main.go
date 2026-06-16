@@ -122,7 +122,10 @@ func run() (err error) {
 				names = append(names, name)
 			}
 		}
-		catalog.FilterByPackageNames(names)
+		notFound := catalog.FilterByPackageNames(names)
+		for _, name := range notFound {
+			slog.Warn("requested package not found in PLCC data", "package", name)
+		}
 	} else {
 		catalog.FilterPackages()
 	}

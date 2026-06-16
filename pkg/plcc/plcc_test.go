@@ -116,12 +116,15 @@ func TestFilterByPackageNames(t *testing.T) {
 		{Name: "C", Package: "pkg-c"},
 		{Name: "D", Package: "pkg-d"},
 	}}
-	c.FilterByPackageNames([]string{"pkg-a", "pkg-c"})
+	notFound := c.FilterByPackageNames([]string{"pkg-a", "pkg-c"})
 	if len(c.Data) != 2 {
 		t.Fatalf("got %d products, want 2", len(c.Data))
 	}
 	if c.Data[0].Package != "pkg-a" || c.Data[1].Package != "pkg-c" {
 		t.Errorf("unexpected packages: %q, %q", c.Data[0].Package, c.Data[1].Package)
+	}
+	if len(notFound) != 0 {
+		t.Errorf("expected no not-found names, got %v", notFound)
 	}
 }
 
@@ -130,9 +133,26 @@ func TestFilterByPackageNamesNoMatch(t *testing.T) {
 		{Name: "A", Package: "pkg-a"},
 		{Name: "B", Package: "pkg-b"},
 	}}
-	c.FilterByPackageNames([]string{"nonexistent"})
+	notFound := c.FilterByPackageNames([]string{"nonexistent"})
 	if len(c.Data) != 0 {
 		t.Fatalf("got %d products, want 0", len(c.Data))
+	}
+	if len(notFound) != 1 || notFound[0] != "nonexistent" {
+		t.Errorf("expected [nonexistent], got %v", notFound)
+	}
+}
+
+func TestFilterByPackageNamesPartialMatch(t *testing.T) {
+	c := &Catalog{Data: []Product{
+		{Name: "A", Package: "pkg-a"},
+		{Name: "B", Package: "pkg-b"},
+	}}
+	notFound := c.FilterByPackageNames([]string{"pkg-a", "missing-1", "missing-2"})
+	if len(c.Data) != 1 || c.Data[0].Package != "pkg-a" {
+		t.Fatalf("got %d products, want 1 (pkg-a)", len(c.Data))
+	}
+	if len(notFound) != 2 || notFound[0] != "missing-1" || notFound[1] != "missing-2" {
+		t.Errorf("expected [missing-1 missing-2], got %v", notFound)
 	}
 }
 
