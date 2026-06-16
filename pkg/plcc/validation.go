@@ -116,7 +116,7 @@ type catalogValidatorEntry struct {
 var validatorRegistry = []validatorEntry{
 	{"REQ-DATE-02", "syntax", []Validator{ValidateDatesStatic}},
 	{"REQ-DATE-03", "syntax", []Validator{ValidateDatesClean}},
-	{"REQ-DATE-04", "syntax", []Validator{ValidatePointInTimePhases, ValidateDatesContiguity}},
+	{"REQ-DATE-04", "syntax", []Validator{ValidateDatesContiguity}},
 	{"REQ-VER-01", "syntax", []Validator{ValidateVersionNames}},
 	{"REQ-TIER-PA-01", "semantic", []Validator{ValidatePlatformAlignedPhases}},
 	{"REQ-TIER-PA-02", "semantic", []Validator{ValidatePlatformAlignedOCP}},
@@ -287,61 +287,6 @@ func ValidateDatesClean(p Product) []string {
 			}
 			if ph.EndDate != "" && ph.EndDate != "N/A" && !isParseableTimestamp(ph.EndDate) {
 				reasons = append(reasons, fmt.Sprintf("REQ-DATE-03: version %q phase %q: end date does not parse (%s)", v.Name, ph.Name, ph.EndDate))
-			}
-		}
-	}
-	return reasons
-}
-
-// ValidatePointInTimePhases checks that point-in-time phases (one date set)
-// are contiguous with adjacent complete phases using the +1 day rule.
-// REQ-DATE-04
-func ValidatePointInTimePhases(p Product) []string {
-	var reasons []string
-	for _, v := range p.Versions {
-		type indexedPhase struct {
-			index int
-			phase Phase
-		}
-		var complete, pointInTime []indexedPhase
-		for i, ph := range v.Phases {
-			startOK := isParseableTimestamp(ph.StartDate)
-			endOK := isParseableTimestamp(ph.EndDate)
-			switch {
-			case !startOK && !endOK:
-				// N/A phase, ignore
-			case startOK && endOK:
-				complete = append(complete, indexedPhase{i, ph})
-			default:
-				pointInTime = append(pointInTime, indexedPhase{i, ph})
-			}
-		}
-
-		if len(complete) == 0 || len(pointInTime) == 0 {
-			continue
-		}
-
-		firstStart := mustParseDate(complete[0].phase.StartDate)
-		lastEnd := mustParseDate(complete[len(complete)-1].phase.EndDate)
-
-		for _, pt := range pointInTime {
-			ph := pt.phase
-			if !isParseableTimestamp(ph.StartDate) {
-				ptEnd := mustParseDate(ph.EndDate)
-				expectedEnd := firstStart.AddDate(0, 0, -1)
-				if pt.index < complete[0].index && ptEnd.Equal(expectedEnd) {
-					continue
-				}
-				reasons = append(reasons, fmt.Sprintf("REQ-DATE-04: version %q phase %q: point-in-time end (%s) is not one day before first phase start (%s)",
-					v.Name, ph.Name, FormatDate(ptEnd), FormatDate(firstStart)))
-			} else {
-				ptStart := mustParseDate(ph.StartDate)
-				expectedStart := lastEnd.AddDate(0, 0, 1)
-				if pt.index > complete[len(complete)-1].index && ptStart.Equal(expectedStart) {
-					continue
-				}
-				reasons = append(reasons, fmt.Sprintf("REQ-DATE-04: version %q phase %q: point-in-time start (%s) is not one day after last phase end (%s)",
-					v.Name, ph.Name, FormatDate(ptStart), FormatDate(lastEnd)))
 			}
 		}
 	}

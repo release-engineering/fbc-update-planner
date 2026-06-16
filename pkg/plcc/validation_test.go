@@ -593,41 +593,6 @@ func TestValidateHasVersions(t *testing.T) {
 	}
 }
 
-// --- REQ-DATE-04 ---
-
-func TestValidatePointInTimePhases(t *testing.T) {
-	tests := []struct {
-		name   string
-		p      Product
-		wantOK bool
-	}{
-		{"aligned before first (+1 day rule)", Product{Versions: []Version{{Name: "1.0", Phases: []Phase{
-			{Name: "GA", StartDate: "N/A", EndDate: "2024-12-31T00:00:00.000Z"},
-			{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
-		}}}}, true},
-		{"aligned after last (+1 day rule)", Product{Versions: []Version{{Name: "1.0", Phases: []Phase{
-			{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
-			{Name: "EOL", StartDate: "2025-07-01T00:00:00.000Z", EndDate: "N/A"},
-		}}}}, true},
-		{"misaligned before first", Product{Versions: []Version{{Name: "1.0", Phases: []Phase{
-			{Name: "GA", StartDate: "N/A", EndDate: "2025-01-02T00:00:00.000Z"},
-			{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
-		}}}}, false},
-		{"misaligned after last", Product{Versions: []Version{{Name: "1.0", Phases: []Phase{
-			{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
-			{Name: "EOL", StartDate: "2025-07-05T00:00:00.000Z", EndDate: "N/A"},
-		}}}}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reasons := ValidatePointInTimePhases(tt.p)
-			if (len(reasons) == 0) != tt.wantOK {
-				t.Errorf("ok = %v, want %v; reasons: %v", len(reasons) == 0, tt.wantOK, reasons)
-			}
-		})
-	}
-}
-
 // --- CUSTOM-03 ---
 
 func TestValidatePhaseEndAfterStart(t *testing.T) {

@@ -66,12 +66,11 @@ Validators are split into three groups: `SyntaxValidators()` (data format/struct
 | 2 | `ValidateHasVersions` | CUSTOM-02 | Product must have ≥1 version |
 | 3 | `ValidateDatesStatic` | REQ-DATE-02 | Dates must be static values (checks `_format` field) |
 | 4 | `ValidateDatesClean` | REQ-DATE-03 | Non-empty, non-N/A dates must cleanly parse |
-| 5 | `ValidatePointInTimePhases` | REQ-DATE-04 | Point-in-time phases must align (+1 day) with adjacent phases |
-| 6 | `ValidateDatesContiguity` | REQ-DATE-04 | Consecutive phases must start 1 day after previous ends |
-| 7 | `ValidatePhaseEndAfterStart` | CUSTOM-03 | Phase end date must be after start date |
-| 8 | `ValidateVersionNames` | REQ-VER-01 | Version names must match `MAJOR.MINOR` |
-| 9 | `ValidateOCPFormat` | REQ-FIELD-02 | OCP compatibility on aligned versions must match `MAJOR.MINOR` |
-| 10 | `ValidateOCPFormatAll` | CUSTOM-04 | OCP compatibility format on non-aligned versions |
+| 5 | `ValidateDatesContiguity` | REQ-DATE-04 | Consecutive phases must start 1 day after previous ends |
+| 6 | `ValidatePhaseEndAfterStart` | CUSTOM-03 | Phase end date must be after start date |
+| 7 | `ValidateVersionNames` | REQ-VER-01 | Version names must match `MAJOR.MINOR` |
+| 8 | `ValidateOCPFormat` | REQ-FIELD-02 | OCP compatibility on aligned versions must match `MAJOR.MINOR` |
+| 9 | `ValidateOCPFormatAll` | CUSTOM-04 | OCP compatibility format on non-aligned versions |
 
 #### Semantic Validators
 
