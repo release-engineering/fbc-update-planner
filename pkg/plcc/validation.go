@@ -309,7 +309,7 @@ func ValidateDatesContiguity(p Product) []string {
 			}
 			start := mustParseDate(ph.StartDate)
 			end := mustParseDate(ph.EndDate)
-			if end.After(start) {
+			if !start.After(end) {
 				validPhases = append(validPhases, struct {
 					name       string
 					start, end time.Time

@@ -207,6 +207,11 @@ func TestValidateDatesContiguity(t *testing.T) {
 			{Name: "GA", StartDate: "N/A", EndDate: "2025-01-01T00:00:00.000Z"},
 			{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
 		}}}}, true},
+		{"zero-duration phase included", Product{Versions: []Version{{Name: "1.0", Phases: []Phase{
+			{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: "Maintenance", StartDate: "2025-06-30T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: "EOL", StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+		}}}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
