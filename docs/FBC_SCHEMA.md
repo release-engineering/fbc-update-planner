@@ -34,7 +34,7 @@ versions:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Version identifier in `MAJOR.MINOR` format (e.g., `4.12`, `1.5`). |
-| `phases` | array | yes | Ordered list of lifecycle phases for this version. Must be contiguous (no gaps or overlaps). |
+| `phases` | array | yes | Ordered list of lifecycle phases for this version. Contiguity is validated at the PLCC input layer (REQ-DATE-04). |
 | `platformCompatibility` | array | no | Platforms this version is compatible with. Omitted if no compatibility data is available. |
 
 ## Phase Fields
@@ -47,7 +47,8 @@ versions:
 
 ### Phase Continuity
 
-Phases within a version are ordered chronologically and must be contiguous: the start date of phase N must be exactly one day after the end date of phase N-1. There must be no gaps or overlaps between adjacent phases.
+Phases within a version are ordered chronologically. Contiguity (each phase starts exactly one day after the previous phase ends) is validated at the PLCC input layer by `ValidateDatesContiguity` (REQ-DATE-04) and can be enforced with the `--strict` flag.
+Additionally, the FBC output cleanup pipeline removes point-in-time phases (missing start or end date) via `FilterIncompletePhases`.
 
 ## Platform Compatibility Fields
 
