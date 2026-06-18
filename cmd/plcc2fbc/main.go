@@ -44,7 +44,7 @@ func main() {
 	}
 }
 
-func run() (err error) {
+func run() error {
 	var format string
 	var logPath string
 	var packages string
@@ -53,6 +53,7 @@ func run() (err error) {
 	var strict bool
 	var validatorsFlag string
 	var listValidators bool
+	var split bool
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
 	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file; parent directory must exist (default: stdout)")
@@ -62,8 +63,9 @@ func run() (err error) {
 	flag.BoolVar(&strict, "strict", false, "treat PLCC validation warnings as errors and filter out failing packages")
 	flag.StringVar(&validatorsFlag, "validators", "all", "comma-separated list of validators to run (labels, groups: all, syntax, semantic, catalog)")
 	flag.BoolVar(&listValidators, "list-validators", false, "list available validators and exit")
+	flag.BoolVar(&split, "split", false, "write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-file>\n\nThe parent directory of <output-file> must already exist.\n\nFlags:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -73,9 +75,13 @@ func run() (err error) {
 		return nil
 	}
 
+	if dumpPLCC && split {
+		return fmt.Errorf("--dump-plcc and --split are mutually exclusive")
+	}
+
 	var logWriter io.Writer = os.Stdout
 	if logPath != "" {
-		if err := validateOutputPath(logPath); err != nil {
+		if err := validateOutputPath(logPath, false); err != nil {
 			return fmt.Errorf("invalid log path: %w", err)
 		}
 		lf, err := os.Create(logPath)
@@ -89,11 +95,25 @@ func run() (err error) {
 
 	if flag.NArg() != 1 {
 		flag.Usage()
-		return fmt.Errorf("missing output file")
+		return fmt.Errorf("missing output path")
 	}
 	writePath := flag.Arg(0)
-	if err := validateOutputPath(writePath); err != nil {
+	if err := validateOutputPath(writePath, split); err != nil {
 		return fmt.Errorf("invalid output path: %w", err)
+	}
+
+	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict)
+	if err != nil {
+		return err
+	}
+
+	if dumpPLCC {
+		if err := catalog.Dump(writePath); err != nil {
+			slog.Error("failed to write PLCC dump", "path", writePath, "error", err)
+			return err
+		}
+		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
+		return nil
 	}
 
 	writer, err := fbc.NewPackageWriter(format)
@@ -102,7 +122,73 @@ func run() (err error) {
 		return err
 	}
 
+	if split {
+		return writeSplit(catalog.Data, writePath, writer)
+	}
+	return writeFile(catalog.Data, writePath, writer)
+}
+
+func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) error {
+	filename := "lifecycle." + writer.Ext()
+
+	var totalCount int
+	for _, product := range products {
+		pkgDir := filepath.Join(dir, product.Package)
+		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+			return fmt.Errorf("creating package directory %s: %w", pkgDir, err)
+		}
+		outPath := filepath.Join(pkgDir, filename)
+		f, err := os.Create(outPath)
+		if err != nil {
+			return fmt.Errorf("creating output file %s: %w", outPath, err)
+		}
+		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, os.Stderr, writer)
+		cerr := f.Close()
+		if werr != nil {
+			return fmt.Errorf("writing package %s: %w", product.Package, werr)
+		}
+		if cerr != nil {
+			return fmt.Errorf("closing %s: %w", outPath, cerr)
+		}
+		totalCount += count
+	}
+
+	if totalCount == 0 {
+		slog.Warn("no FBC data generated")
+		return errPackageNotFound
+	}
+	slog.Info("wrote split FBC data", "count", totalCount, "dir", dir)
+	return nil
+}
+
+func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (err error) {
+	f, err := os.Create(path)
+	if err != nil {
+		slog.Error("failed to create output file", "path", path, "error", err)
+		return err
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing output file %s: %w", path, cerr)
+		}
+	}()
+
+	blobCount, err := fbc.GenerateFBC(products, f, os.Stderr, writer)
+	if err != nil {
+		slog.Error("failed to generate FBC", "error", err)
+		return err
+	}
+	if blobCount == 0 {
+		slog.Warn("no FBC data generated")
+		return errPackageNotFound
+	}
+	slog.Info("wrote FBC data", "count", blobCount, "path", path)
+	return nil
+}
+
+func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*plcc.Catalog, error) {
 	var catalog *plcc.Catalog
+	var err error
 	if inputPath != "" {
 		catalog, err = plcc.Load(inputPath)
 	} else {
@@ -110,7 +196,7 @@ func run() (err error) {
 	}
 	if err != nil {
 		slog.Error("failed to load PLCC data", "error", err)
-		return err
+		return nil, err
 	}
 
 	slog.Info("fetched products from PLCC", "count", catalog.Len())
@@ -132,7 +218,6 @@ func run() (err error) {
 	slog.Info("filtered packages", "count", catalog.Len())
 	catalog.SortByPackage()
 
-	// Resolve which validators to run.
 	var validatorNames []string
 	for _, name := range strings.Split(validatorsFlag, ",") {
 		name = strings.TrimSpace(name)
@@ -143,10 +228,9 @@ func run() (err error) {
 	validators, catalogValidators, err := plcc.LookupValidators(validatorNames...)
 	if err != nil {
 		slog.Error("invalid --validators flag", "error", err)
-		return err
+		return nil, err
 	}
 
-	// Run catalog-level PLCC validators (cross-product checks).
 	if len(catalogValidators) > 0 {
 		before := catalog.Len()
 		for pkg, reasons := range catalog.Validate(strict, catalogValidators...) {
@@ -163,7 +247,6 @@ func run() (err error) {
 		}
 	}
 
-	// Run per-product PLCC validators. With --strict, failing packages are filtered out.
 	var filtered []plcc.Product
 	for _, product := range catalog.Data {
 		warnings := plcc.ValidateProduct(product, validators...)
@@ -187,50 +270,23 @@ func run() (err error) {
 		catalog.Data = filtered
 	}
 
-	if dumpPLCC {
-		if err := catalog.Dump(writePath); err != nil {
-			slog.Error("failed to write PLCC dump", "path", writePath, "error", err)
-			return err
-		}
-		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
-		return nil
-	}
-
-	f, err := os.Create(writePath)
-	if err != nil {
-		slog.Error("failed to create output file", "path", writePath, "error", err)
-		return err
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("closing output file %s: %w", writePath, cerr)
-		}
-	}()
-
-	blobCount, err := fbc.GenerateFBC(catalog.Data, f, os.Stderr, writer)
-	if err != nil {
-		slog.Error("failed to generate FBC", "error", err)
-		return err
-	}
-	if blobCount == 0 {
-		slog.Warn("no FBC data generated")
-		return errPackageNotFound
-	}
-	slog.Info("wrote FBC data", "count", blobCount, "path", writePath, "format", format)
-	return nil
+	return catalog, nil
 }
 
-func validateOutputPath(path string) error {
-	dir := filepath.Dir(path)
+func validateOutputPath(path string, isDir bool) error {
+	dir := path
+	if !isDir {
+		dir = filepath.Dir(path)
+	}
 	info, err := os.Stat(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("parent directory %q does not exist", dir)
+		return fmt.Errorf("directory %q does not exist", dir)
 	}
 	if err != nil {
-		return fmt.Errorf("cannot access parent directory %q: %w", dir, err)
+		return fmt.Errorf("cannot access %q: %w", dir, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("parent path %q is not a directory", dir)
+		return fmt.Errorf("path %q is not a directory", dir)
 	}
 	return nil
 }

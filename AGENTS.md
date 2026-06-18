@@ -49,7 +49,7 @@ No separate lint command — CI runs `golangci-lint` with defaults (no `.golangc
 ### CLI Flags
 
 ```
-plcc2fbc [flags] <output-file>
+plcc2fbc [flags] <output-path>
 
 -o, --output        Output format: json, json-pretty, or yaml (default: json)
 -l, --log           Write operational logs to a file (default: stdout)
@@ -59,6 +59,7 @@ plcc2fbc [flags] <output-file>
     --strict        Treat PLCC validation warnings as errors; filter out failing packages
     --validators    Comma-separated validators to run: labels, or groups all/syntax/semantic/catalog (default: all)
     --list-validators  List available validators and exit
+    --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory
 ```
 
 ## Architecture

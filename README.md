@@ -13,7 +13,7 @@ make build
 ## Run
 
 ```shell
-bin/plcc2fbc [flags] <output-file>
+bin/plcc2fbc [flags] <output-path>
 ```
 
 | Flag | Description |
@@ -26,6 +26,7 @@ bin/plcc2fbc [flags] <output-file>
 | `--strict` | Treat PLCC validation warnings as errors and filter out failing packages |
 | `--validators <list>` | Comma-separated validators to run: labels (e.g. `REQ-DATE-03`) or groups (`all`, `syntax`, `semantic`, `catalog`). Default: `all` |
 | `--list-validators` | List available validators and exit |
+| `--split` | Write each package to `<dir>/<package>/lifecycle.{json,yaml}`; positional arg is a directory |
 
 ## Generate FBC snapshot
 

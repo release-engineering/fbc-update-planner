@@ -27,6 +27,7 @@ import (
 // PackageWriter serializes FBC packages to a writer.
 type PackageWriter interface {
 	Write(out io.Writer, packages ...*Package) error
+	Ext() string
 }
 
 // NewPackageWriter returns a PackageWriter for the given format ("json", "json-pretty", or "yaml").
@@ -46,6 +47,8 @@ func NewPackageWriter(format string) (PackageWriter, error) {
 // JSONWriter writes packages as compact JSON. A single package is written
 // directly; multiple packages are wrapped in an array.
 type JSONWriter struct{}
+
+func (JSONWriter) Ext() string { return "json" }
 
 func (JSONWriter) Write(out io.Writer, packages ...*Package) error {
 	if len(packages) == 0 {
@@ -70,6 +73,8 @@ func (JSONWriter) Write(out io.Writer, packages ...*Package) error {
 // directly; multiple packages are wrapped in an array.
 type JSONPrettyWriter struct{}
 
+func (JSONPrettyWriter) Ext() string { return "json" }
+
 func (JSONPrettyWriter) Write(out io.Writer, packages ...*Package) error {
 	if len(packages) == 0 {
 		return nil
@@ -91,6 +96,8 @@ func (JSONPrettyWriter) Write(out io.Writer, packages ...*Package) error {
 
 // YAMLWriter writes packages as YAML documents separated by "---".
 type YAMLWriter struct{}
+
+func (YAMLWriter) Ext() string { return "yaml" }
 
 func (YAMLWriter) Write(out io.Writer, packages ...*Package) error {
 	for i, pkg := range packages {
