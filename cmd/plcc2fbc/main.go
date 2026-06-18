@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"log/slog"
 	"os"
@@ -133,6 +134,9 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) e
 
 	var totalCount int
 	for _, product := range products {
+		if !fs.ValidPath(product.Package) {
+			return fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
+		}
 		pkgDir := filepath.Join(dir, product.Package)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
 			return fmt.Errorf("creating package directory %s: %w", pkgDir, err)

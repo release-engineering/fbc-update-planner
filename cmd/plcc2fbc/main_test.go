@@ -94,6 +94,15 @@ func TestRun(t *testing.T) {
 			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--split", t.TempDir()},
 			wantNotFound: true,
 		},
+		{
+			name: "split rejects path traversal in package name",
+			args: func() []string {
+				f := filepath.Join(t.TempDir(), "traversal.json")
+				_ = os.WriteFile(f, []byte(`{"data":[{"name":"evil","package":"../escape","versions":[{"name":"1.0","phases":[{"name":"GA","start_date":"2025-01-01T00:00:00.000Z","end_date":"2026-01-01T00:00:00.000Z"}]}]}]}`), 0o644)
+				return []string{"plcc2fbc", "-i", f, "-p", "../escape", "--split", t.TempDir()}
+			}(),
+			wantErr: "unsafe package name",
+		},
 	}
 
 	for _, tt := range tests {
