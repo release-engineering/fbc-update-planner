@@ -130,6 +130,11 @@ func run() error {
 }
 
 func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) error {
+	if len(products) == 0 {
+		slog.Warn("no FBC data generated")
+		return errPackageNotFound
+	}
+
 	filename := "lifecycle." + writer.Ext()
 
 	var totalCount int
@@ -149,18 +154,19 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) e
 		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, os.Stderr, writer)
 		cerr := f.Close()
 		if werr != nil {
+			_ = os.Remove(outPath)
 			return fmt.Errorf("writing package %s: %w", product.Package, werr)
 		}
 		if cerr != nil {
 			return fmt.Errorf("closing %s: %w", outPath, cerr)
 		}
+		if count == 0 {
+			_ = os.Remove(outPath)
+			return fmt.Errorf("package %s produced no FBC data", product.Package)
+		}
 		totalCount += count
 	}
 
-	if totalCount == 0 {
-		slog.Warn("no FBC data generated")
-		return errPackageNotFound
-	}
 	slog.Info("wrote split FBC data", "count", totalCount, "dir", dir)
 	return nil
 }
