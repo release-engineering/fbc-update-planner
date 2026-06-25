@@ -3,12 +3,11 @@ FROM registry.access.redhat.com/ubi9/go-toolset:1.26 AS builder
 WORKDIR /opt/app-root/src
 ENV CGO_ENABLED=0
 
-# Cache module downloads separately from source changes
-COPY --chown=1001:0 go.mod go.sum ./
-RUN go mod download
-
+# Copy all sources, including go.mod and go.sum, at once
 COPY --chown=1001:0 . .
 
+# Konflux will automatically inject `. /cachi2/cachi2.env &&` before this RUN 
+# to point the Go toolchain to the offline dependency cache it prefetched.
 RUN LDFLAGS="-s -w" make build
 
 ## Final image
