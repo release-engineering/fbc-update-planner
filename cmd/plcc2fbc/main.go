@@ -38,18 +38,15 @@ var errNoFBCOutput = errors.New("no FBC data generated")
 func main() {
 	if err := run(); err != nil {
 		var pkgErr *plcc.PackagesNotFoundError
-		if errors.As(err, &pkgErr) {
-			for _, name := range pkgErr.Names {
-				slog.Error("requested package not found in PLCC data", "package", name)
-			}
+		switch {
+		case errors.As(err, &pkgErr):
 			os.Exit(3)
-		}
-		if errors.Is(err, errNoFBCOutput) {
-			slog.Error("no FBC data generated")
+		case errors.Is(err, errNoFBCOutput):
 			os.Exit(2)
+		default:
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
 		}
-		slog.Error(err.Error())
-		os.Exit(1)
 	}
 }
 
@@ -114,12 +111,21 @@ func run() error {
 
 	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict)
 	if err != nil {
+		var pkgErr *plcc.PackagesNotFoundError
+		if errors.As(err, &pkgErr) {
+			for _, name := range pkgErr.Names {
+				slog.Error("requested package not found in PLCC data", "package", name)
+			}
+		} else {
+			slog.Error("fatal error", "error", err)
+		}
 		return err
 	}
 
 	if dumpPLCC {
 		if err := catalog.Dump(writePath); err != nil {
-			slog.Error("failed to write PLCC dump", "path", writePath, "error", err)
+			err = fmt.Errorf("failed to write PLCC dump to %s: %w", writePath, err)
+			slog.Error("fatal error", "error", err)
 			return err
 		}
 		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
@@ -128,66 +134,72 @@ func run() error {
 
 	writer, err := fbc.NewPackageWriter(format)
 	if err != nil {
-		slog.Error("invalid output format", "flag", "-o", "value", format, "allowed", "json,json-pretty,yaml")
+		err = fmt.Errorf("invalid output format %q (allowed: json, json-pretty, yaml): %w", format, err)
+		slog.Error("fatal error", "error", err)
 		return err
 	}
 
+	var count int
 	if split {
-		if err := writeSplit(catalog.Data, writePath, writer); err != nil {
-			return err
-		}
-		slog.Info("wrote split FBC data", "dir", writePath)
-		return nil
+		count, err = writeSplit(catalog.Data, writePath, writer)
+	} else {
+		count, err = writeFile(catalog.Data, writePath, writer)
 	}
-	if err := writeFile(catalog.Data, writePath, writer); err != nil {
+	if err != nil {
+		if errors.Is(err, errNoFBCOutput) {
+			slog.Error("no FBC data generated")
+		} else {
+			slog.Error("fatal error", "error", err)
+		}
 		return err
 	}
-	slog.Info("wrote FBC data", "path", writePath)
+	slog.Info("wrote FBC data", "count", count, "path", writePath)
 	return nil
 }
 
-func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) error {
+func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) (int, error) {
 	if len(products) == 0 {
-		return errNoFBCOutput
+		return 0, errNoFBCOutput
 	}
 
 	filename := "lifecycle." + writer.Ext()
 
 	for _, product := range products {
 		if !fs.ValidPath(product.Package) {
-			return fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
+			return 0, fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
 		}
 		pkgDir := filepath.Join(dir, product.Package)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-			return fmt.Errorf("creating package directory %s: %w", pkgDir, err)
+			return 0, fmt.Errorf("creating package directory %s: %w", pkgDir, err)
 		}
 		outPath := filepath.Join(pkgDir, filename)
 		f, err := os.Create(outPath)
 		if err != nil {
-			return fmt.Errorf("creating output file %s: %w", outPath, err)
+			return 0, fmt.Errorf("creating output file %s: %w", outPath, err)
 		}
 		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, os.Stderr, writer)
 		cerr := f.Close()
 		if werr != nil {
 			_ = os.Remove(outPath)
-			return fmt.Errorf("writing package %s: %w", product.Package, werr)
+			return 0, fmt.Errorf("writing package %s: %w", product.Package, werr)
 		}
 		if cerr != nil {
-			return fmt.Errorf("closing %s: %w", outPath, cerr)
+			return 0, fmt.Errorf("closing %s: %w", outPath, cerr)
 		}
-		if count == 0 {
+		// Safeguard: a single product should always produce exactly one FBC blob.
+		if count != 1 {
 			_ = os.Remove(outPath)
-			return fmt.Errorf("package %s produced no FBC data", product.Package)
+			return 0, fmt.Errorf("package %s produced %d FBC blobs, expected 1", product.Package, count)
 		}
 	}
 
-	return nil
+	return len(products), nil
 }
 
-func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (err error) {
+func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (count int, err error) {
 	f, err := os.Create(path)
 	if err != nil {
-		return err
+		return 0, fmt.Errorf("creating output file %s: %w", path, err)
 	}
 	defer func() {
 		if cerr := f.Close(); cerr != nil && err == nil {
@@ -197,12 +209,12 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (
 
 	blobCount, err := fbc.GenerateFBC(products, f, os.Stderr, writer)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if blobCount == 0 {
-		return errNoFBCOutput
+		return 0, errNoFBCOutput
 	}
-	return nil
+	return blobCount, nil
 }
 
 func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*plcc.Catalog, error) {
@@ -214,7 +226,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 		catalog, err = plcc.Fetch()
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading PLCC data: %w", err)
 	}
 
 	slog.Info("fetched products from PLCC", "count", catalog.Len())
@@ -230,7 +242,10 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 			if strict {
 				return nil, err
 			}
-			pkgErr := err.(*plcc.PackagesNotFoundError)
+			var pkgErr *plcc.PackagesNotFoundError
+			if !errors.As(err, &pkgErr) {
+				return nil, err
+			}
 			for _, name := range pkgErr.Names {
 				slog.Warn("requested package not found in PLCC data", "package", name)
 			}
@@ -250,7 +265,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 	}
 	validators, catalogValidators, err := plcc.LookupValidators(validatorNames...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid --validators flag: %w", err)
 	}
 
 	if len(catalogValidators) > 0 {

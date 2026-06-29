@@ -110,6 +110,14 @@ func TestDumpLoadRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPackagesNotFoundErrorMessage(t *testing.T) {
+	err := &PackagesNotFoundError{Names: []string{"foo", "bar"}}
+	want := "packages not found in PLCC data: foo, bar"
+	if got := err.Error(); got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
 func TestFilterByPackageNames(t *testing.T) {
 	c := &Catalog{Data: []Product{
 		{Name: "A", Package: "pkg-a"},

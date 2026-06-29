@@ -45,6 +45,7 @@ This filter always returns `nil` — it mutates the package but never rejects it
 | Condition | Stage | Effect |
 |---|---|---|
 | Product has no `package` | PLCC filtering | Silently skipped |
+| Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--permissive` warning only |
 | Package maps to multiple products | PLCC catalog validation | All copies removed; with `--permissive` warning only |
 | Phase with empty start or end date | Filter pipeline | Phase silently removed |
 
