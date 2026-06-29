@@ -68,7 +68,7 @@ plcc2fbc [flags] <output-path>
 
 ```
 PLCC API (or -i file) → plcc.Fetch()/Load()
-  → catalog.FilterByPackageNames()  # if -p flag set
+  → catalog.FilterByPackageNames()  # if -p flag set; returns PackagesNotFoundError on missing packages
   → catalog.FilterPackages()        # otherwise: drop products without package names
   → catalog.SortByPackage()         # alphabetical
   → catalog.Validate()              # catalog-level PLCC validators (cross-product checks)
@@ -88,6 +88,7 @@ With --dump-plcc:
 ### Key Types
 
 - `plcc.Catalog` / `plcc.Product` / `plcc.Version` / `plcc.Phase` — API-side types
+- `plcc.PackagesNotFoundError` — custom error returned by `FilterByPackageNames` when `-p` packages are missing
 - `plcc.Validator` — `func(Product) []string` — per-product validator callback
 - `plcc.CatalogValidator` — `func([]Product) CatalogRejections` — cross-product validator
 - `fbc.Package` / `fbc.Version` / `fbc.Phase` / `fbc.Platform` — output-side types
@@ -134,9 +135,11 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 ## Gotchas
 
-- The CLI exits with code 2 if no valid FBC blobs are produced, code 3 if requested packages are not found (with `--strict`), and code 1 for other fatal errors — all are intentional
+- The CLI exits with code 1 for fatal errors, code 2 if no valid FBC blobs are produced, and code 3 if requested `-p` packages are not found (without `--permissive`) — all are intentional
 - `FilterIncompletePhases` mutates the package in place (drops phases) — it never rejects
 - All `.go` files must have the Apache 2.0 license header
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
 - Design choice: `newPackage()` silently converts unparseable timestamps to empty strings; PLCC validators catch data quality issues upstream, FBC filters then clean up the translated output
+- Error logging pattern: all structured `slog` logging happens in `run()` and its callees (while the log file is still open). `run()` logs every error via `slog` before returning it. `main()` only handles exit codes; it prints to stderr only for fatal errors (exit code 1), since those may occur before `slog` is configured
+- All structured logging uses `log/slog` (JSON handler) — the `log` package is not used
