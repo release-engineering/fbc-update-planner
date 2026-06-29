@@ -70,6 +70,7 @@ func run() error {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	strict := !permissive
 
 	if listValidators {
 		fmt.Print(plcc.ListValidators())
@@ -103,7 +104,7 @@ func run() error {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
 
-	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, !permissive)
+	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict)
 	if err != nil {
 		return err
 	}

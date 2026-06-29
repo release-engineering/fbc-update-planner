@@ -61,6 +61,11 @@ func TestRun(t *testing.T) {
 			wantNotFound: true,
 		},
 		{
+			name:         "default strict filters duplicate packages",
+			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "amq-broker-rhel8", t.TempDir() + "/out.json"},
+			wantNotFound: true,
+		},
+		{
 			name:    "output path parent dir does not exist",
 			args:    []string{"plcc2fbc", "-i", testdataInput, "/nonexistent-dir/output.json"},
 			wantErr: "does not exist",
