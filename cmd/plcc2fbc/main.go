@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,13 +39,17 @@ func main() {
 	if err := run(); err != nil {
 		var pkgErr *plcc.PackagesNotFoundError
 		if errors.As(err, &pkgErr) {
-			log.Println(err)
+			for _, name := range pkgErr.Names {
+				slog.Error("requested package not found in PLCC data", "package", name)
+			}
 			os.Exit(3)
 		}
 		if errors.Is(err, errNoFBCOutput) {
+			slog.Error("no FBC data generated")
 			os.Exit(2)
 		}
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -130,20 +133,26 @@ func run() error {
 	}
 
 	if split {
-		return writeSplit(catalog.Data, writePath, writer)
+		if err := writeSplit(catalog.Data, writePath, writer); err != nil {
+			return err
+		}
+		slog.Info("wrote split FBC data", "dir", writePath)
+		return nil
 	}
-	return writeFile(catalog.Data, writePath, writer)
+	if err := writeFile(catalog.Data, writePath, writer); err != nil {
+		return err
+	}
+	slog.Info("wrote FBC data", "path", writePath)
+	return nil
 }
 
 func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) error {
 	if len(products) == 0 {
-		slog.Warn("no FBC data generated")
 		return errNoFBCOutput
 	}
 
 	filename := "lifecycle." + writer.Ext()
 
-	var totalCount int
 	for _, product := range products {
 		if !fs.ValidPath(product.Package) {
 			return fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
@@ -170,17 +179,14 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) e
 			_ = os.Remove(outPath)
 			return fmt.Errorf("package %s produced no FBC data", product.Package)
 		}
-		totalCount += count
 	}
 
-	slog.Info("wrote split FBC data", "count", totalCount, "dir", dir)
 	return nil
 }
 
 func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (err error) {
 	f, err := os.Create(path)
 	if err != nil {
-		slog.Error("failed to create output file", "path", path, "error", err)
 		return err
 	}
 	defer func() {
@@ -191,14 +197,11 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (
 
 	blobCount, err := fbc.GenerateFBC(products, f, os.Stderr, writer)
 	if err != nil {
-		slog.Error("failed to generate FBC", "error", err)
 		return err
 	}
 	if blobCount == 0 {
-		slog.Warn("no FBC data generated")
 		return errNoFBCOutput
 	}
-	slog.Info("wrote FBC data", "count", blobCount, "path", path)
 	return nil
 }
 
@@ -211,7 +214,6 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 		catalog, err = plcc.Fetch()
 	}
 	if err != nil {
-		slog.Error("failed to load PLCC data", "error", err)
 		return nil, err
 	}
 
@@ -228,11 +230,9 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 			if strict {
 				return nil, err
 			}
-			var pkgErr *plcc.PackagesNotFoundError
-			if errors.As(err, &pkgErr) {
-				for _, name := range pkgErr.Names {
-					slog.Warn("requested package not found in PLCC data", "package", name)
-				}
+			pkgErr := err.(*plcc.PackagesNotFoundError)
+			for _, name := range pkgErr.Names {
+				slog.Warn("requested package not found in PLCC data", "package", name)
 			}
 		}
 	} else {
@@ -250,7 +250,6 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 	}
 	validators, catalogValidators, err := plcc.LookupValidators(validatorNames...)
 	if err != nil {
-		slog.Error("invalid --validators flag", "error", err)
 		return nil, err
 	}
 
