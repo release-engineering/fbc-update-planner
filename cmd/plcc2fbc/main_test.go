@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	flag "github.com/spf13/pflag"
+
+	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
 var testdataInput = filepath.Join("..", "..", "pkg", "fbc", "testdata", "plcc.json")
@@ -35,10 +37,11 @@ func resetFlags(args []string) {
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name         string
-		args         []string
-		wantErr      string
-		wantNotFound bool
+		name              string
+		args              []string
+		wantErr           string
+		wantNotFound      bool
+		wantPkgNotFound   bool
 	}{
 		{
 			name:    "missing output path",
@@ -56,9 +59,9 @@ func TestRun(t *testing.T) {
 			wantErr: "no such file",
 		},
 		{
-			name:         "no matching packages",
-			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", t.TempDir() + "/out.json"},
-			wantNotFound: true,
+			name:            "no matching packages",
+			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", t.TempDir() + "/out.json"},
+			wantPkgNotFound: true,
 		},
 		{
 			name:         "default strict filters duplicate packages",
@@ -95,9 +98,9 @@ func TestRun(t *testing.T) {
 			wantErr: "not a directory",
 		},
 		{
-			name:         "split no matching packages",
-			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--split", t.TempDir()},
-			wantNotFound: true,
+			name:            "split no matching packages",
+			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--split", t.TempDir()},
+			wantPkgNotFound: true,
 		},
 		{
 			name: "split rejects path traversal in package name",
@@ -107,6 +110,21 @@ func TestRun(t *testing.T) {
 				return []string{"plcc2fbc", "-i", f, "-p", "../escape", "--permissive", "--split", t.TempDir()}
 			}(),
 			wantErr: "unsafe package name",
+		},
+		{
+			name:         "permissive no matching packages",
+			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--permissive", t.TempDir() + "/out.json"},
+			wantNotFound: true,
+		},
+		{
+			name:         "permissive split no matching packages",
+			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--permissive", "--split", t.TempDir()},
+			wantNotFound: true,
+		},
+		{
+			name:            "partial match errors by default",
+			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", t.TempDir() + "/out.json"},
+			wantPkgNotFound: true,
 		},
 	}
 
@@ -120,8 +138,16 @@ func TestRun(t *testing.T) {
 			}
 
 			if tt.wantNotFound {
-				if !errors.Is(err, errPackageNotFound) {
-					t.Errorf("expected errPackageNotFound, got: %v", err)
+				if !errors.Is(err, errNoFBCOutput) {
+					t.Errorf("expected errNoFBCOutput, got: %v", err)
+				}
+				return
+			}
+
+			if tt.wantPkgNotFound {
+				var pkgErr *plcc.PackagesNotFoundError
+				if !errors.As(err, &pkgErr) {
+					t.Errorf("expected PackagesNotFoundError, got: %v", err)
 				}
 				return
 			}
@@ -197,6 +223,22 @@ func TestRunSuccess(t *testing.T) {
 				}
 				if strings.Contains(content, "advanced-cluster-management") {
 					t.Error("output should not contain other packages")
+				}
+			},
+		},
+		{
+			name: "permissive partial match warns but succeeds",
+			args: func(out string) []string {
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--permissive", out}
+			},
+			checks: func(t *testing.T, outFile string) {
+				data, err := os.ReadFile(outFile)
+				if err != nil {
+					t.Fatalf("reading output: %v", err)
+				}
+				content := string(data)
+				if !strings.Contains(content, "rhacs-operator") {
+					t.Error("output should contain rhacs-operator")
 				}
 			},
 		},
