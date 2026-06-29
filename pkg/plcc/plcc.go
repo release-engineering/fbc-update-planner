@@ -23,8 +23,18 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"time"
 )
+
+// PackagesNotFoundError is returned when requested package names are not found in the catalog.
+type PackagesNotFoundError struct {
+	Names []string
+}
+
+func (e *PackagesNotFoundError) Error() string {
+	return fmt.Sprintf("packages not found in PLCC data: %s", strings.Join(e.Names, ", "))
+}
 
 // APIURL is the Red Hat Product Life Cycle API endpoint.
 const APIURL = "https://access.redhat.com/product-life-cycles/api/v2/products"
@@ -135,8 +145,8 @@ func (c *Catalog) FilterPackages() {
 }
 
 // FilterByPackageNames keeps only products whose package name is in the provided list,
-// modifying the catalog in place. It returns the names that were not found.
-func (c *Catalog) FilterByPackageNames(names []string) []string {
+// modifying the catalog in place. It returns a PackagesNotFoundError if any names were not found.
+func (c *Catalog) FilterByPackageNames(names []string) error {
 	allowed := make(map[string]bool, len(names))
 	for _, name := range names {
 		allowed[name] = true
@@ -157,7 +167,10 @@ func (c *Catalog) FilterByPackageNames(names []string) []string {
 			notFound = append(notFound, name)
 		}
 	}
-	return notFound
+	if len(notFound) > 0 {
+		return &PackagesNotFoundError{Names: notFound}
+	}
+	return nil
 }
 
 // Len returns the number of products currently in the catalog.

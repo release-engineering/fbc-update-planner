@@ -134,7 +134,7 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 ## Gotchas
 
-- The CLI exits with code 2 if no valid FBC blobs are produced, and code 1 for other fatal errors — both are intentional
+- The CLI exits with code 2 if no valid FBC blobs are produced, code 3 if requested packages are not found (with `--strict`), and code 1 for other fatal errors — all are intentional
 - `FilterIncompletePhases` mutates the package in place (drops phases) — it never rejects
 - All `.go` files must have the Apache 2.0 license header
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand

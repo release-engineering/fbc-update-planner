@@ -34,11 +34,16 @@ import (
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
 )
 
-var errPackageNotFound = errors.New("no FBC data generated")
+var errNoFBCOutput = errors.New("no FBC data generated")
 
 func main() {
 	if err := run(); err != nil {
-		if errors.Is(err, errPackageNotFound) {
+		var pkgErr *plcc.PackagesNotFoundError
+		if errors.As(err, &pkgErr) {
+			log.Println(err)
+			os.Exit(3)
+		}
+		if errors.Is(err, errNoFBCOutput) {
 			os.Exit(2)
 		}
 		log.Fatal(err)
@@ -133,7 +138,7 @@ func run() error {
 func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) error {
 	if len(products) == 0 {
 		slog.Warn("no FBC data generated")
-		return errPackageNotFound
+		return errNoFBCOutput
 	}
 
 	filename := "lifecycle." + writer.Ext()
@@ -191,7 +196,7 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (
 	}
 	if blobCount == 0 {
 		slog.Warn("no FBC data generated")
-		return errPackageNotFound
+		return errNoFBCOutput
 	}
 	slog.Info("wrote FBC data", "count", blobCount, "path", path)
 	return nil
@@ -219,9 +224,16 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 				names = append(names, name)
 			}
 		}
-		notFound := catalog.FilterByPackageNames(names)
-		for _, name := range notFound {
-			slog.Warn("requested package not found in PLCC data", "package", name)
+		if err := catalog.FilterByPackageNames(names); err != nil {
+			if strict {
+				return nil, err
+			}
+			var pkgErr *plcc.PackagesNotFoundError
+			if errors.As(err, &pkgErr) {
+				for _, name := range pkgErr.Names {
+					slog.Warn("requested package not found in PLCC data", "package", name)
+				}
+			}
 		}
 	} else {
 		catalog.FilterPackages()

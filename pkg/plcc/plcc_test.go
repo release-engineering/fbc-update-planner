@@ -18,6 +18,7 @@ package plcc
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -116,15 +117,15 @@ func TestFilterByPackageNames(t *testing.T) {
 		{Name: "C", Package: "pkg-c"},
 		{Name: "D", Package: "pkg-d"},
 	}}
-	notFound := c.FilterByPackageNames([]string{"pkg-a", "pkg-c"})
+	err := c.FilterByPackageNames([]string{"pkg-a", "pkg-c"})
 	if len(c.Data) != 2 {
 		t.Fatalf("got %d products, want 2", len(c.Data))
 	}
 	if c.Data[0].Package != "pkg-a" || c.Data[1].Package != "pkg-c" {
 		t.Errorf("unexpected packages: %q, %q", c.Data[0].Package, c.Data[1].Package)
 	}
-	if len(notFound) != 0 {
-		t.Errorf("expected no not-found names, got %v", notFound)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
 	}
 }
 
@@ -133,12 +134,16 @@ func TestFilterByPackageNamesNoMatch(t *testing.T) {
 		{Name: "A", Package: "pkg-a"},
 		{Name: "B", Package: "pkg-b"},
 	}}
-	notFound := c.FilterByPackageNames([]string{"nonexistent"})
+	err := c.FilterByPackageNames([]string{"nonexistent"})
 	if len(c.Data) != 0 {
 		t.Fatalf("got %d products, want 0", len(c.Data))
 	}
-	if len(notFound) != 1 || notFound[0] != "nonexistent" {
-		t.Errorf("expected [nonexistent], got %v", notFound)
+	var pkgErr *PackagesNotFoundError
+	if !errors.As(err, &pkgErr) {
+		t.Fatalf("expected PackagesNotFoundError, got %v", err)
+	}
+	if len(pkgErr.Names) != 1 || pkgErr.Names[0] != "nonexistent" {
+		t.Errorf("expected [nonexistent], got %v", pkgErr.Names)
 	}
 }
 
@@ -147,12 +152,16 @@ func TestFilterByPackageNamesPartialMatch(t *testing.T) {
 		{Name: "A", Package: "pkg-a"},
 		{Name: "B", Package: "pkg-b"},
 	}}
-	notFound := c.FilterByPackageNames([]string{"pkg-a", "missing-1", "missing-2"})
+	err := c.FilterByPackageNames([]string{"pkg-a", "missing-1", "missing-2"})
 	if len(c.Data) != 1 || c.Data[0].Package != "pkg-a" {
 		t.Fatalf("got %d products, want 1 (pkg-a)", len(c.Data))
 	}
-	if len(notFound) != 2 || notFound[0] != "missing-1" || notFound[1] != "missing-2" {
-		t.Errorf("expected [missing-1 missing-2], got %v", notFound)
+	var pkgErr *PackagesNotFoundError
+	if !errors.As(err, &pkgErr) {
+		t.Fatalf("expected PackagesNotFoundError, got %v", err)
+	}
+	if len(pkgErr.Names) != 2 || pkgErr.Names[0] != "missing-1" || pkgErr.Names[1] != "missing-2" {
+		t.Errorf("expected [missing-1 missing-2], got %v", pkgErr.Names)
 	}
 }
 
