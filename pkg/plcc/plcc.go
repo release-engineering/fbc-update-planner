@@ -56,6 +56,15 @@ type Product struct {
 	IsOperator     bool      `json:"is_operator"`
 }
 
+// Packages returns the package names for this product. The package field
+// may contain a comma-separated list (e.g. "odf-operator,mcg-operator").
+func (p Product) Packages() []string {
+	if p.Package == "" {
+		return nil
+	}
+	return strings.Split(p.Package, ",")
+}
+
 // Version represents a product version with its lifecycle phases and platform compatibility.
 type Version struct {
 	Name                   string  `json:"name"`
@@ -157,10 +166,17 @@ func (c *Catalog) FilterByPackageNames(names []string) error {
 	}
 	found := make(map[string]bool, len(names))
 	filtered := make([]Product, 0, len(names))
-	for _, p := range c.Data {
-		if allowed[p.Package] {
-			filtered = append(filtered, p)
-			found[p.Package] = true
+	for i := range c.Data {
+		matched := false
+		for _, pkg := range c.Data[i].Packages() {
+			pkg = strings.TrimSpace(pkg)
+			if allowed[pkg] {
+				found[pkg] = true
+				matched = true
+			}
+		}
+		if matched {
+			filtered = append(filtered, c.Data[i])
 		}
 	}
 	c.Data = filtered

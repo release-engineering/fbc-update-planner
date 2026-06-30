@@ -621,8 +621,11 @@ func ValidateOCPFormat(p Product) []string {
 func ValidateNoDuplicates(products []Product) CatalogRejections {
 	pkgCount := make(map[string]int)
 	for _, p := range products {
-		if p.Package != "" {
-			pkgCount[p.Package]++
+		for _, pkg := range p.Packages() {
+			pkg = strings.TrimSpace(pkg)
+			if pkg != "" {
+				pkgCount[pkg]++
+			}
 		}
 	}
 	rejections := make(CatalogRejections)

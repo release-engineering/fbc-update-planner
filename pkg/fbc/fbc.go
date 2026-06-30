@@ -111,12 +111,16 @@ func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report
 	var failures []report.ValidationResult
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
-		pkg, failure := TranslateProduct(product, filters...)
-		if failure != nil {
-			failures = append(failures, *failure)
-			continue
+		for _, pkgName := range product.Packages() {
+			single := product
+			single.Package = pkgName
+			pkg, failure := TranslateProduct(single, filters...)
+			if failure != nil {
+				failures = append(failures, *failure)
+				continue
+			}
+			validPackages = append(validPackages, pkg)
 		}
-		validPackages = append(validPackages, pkg)
 	}
 	return validPackages, failures
 }
