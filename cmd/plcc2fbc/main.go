@@ -140,32 +140,40 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) e
 
 	var totalCount int
 	for _, product := range products {
-		if !fs.ValidPath(product.Package) {
-			return fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
+		for _, pkgName := range product.Packages() {
+			pkgName = strings.TrimSpace(pkgName)
+			if pkgName == "" {
+				continue
+			}
+			if !fs.ValidPath(pkgName) {
+				return fmt.Errorf("unsafe package name %q: would escape output directory", pkgName)
+			}
+			pkgDir := filepath.Join(dir, pkgName)
+			if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+				return fmt.Errorf("creating package directory %s: %w", pkgDir, err)
+			}
+			outPath := filepath.Join(pkgDir, filename)
+			f, err := os.Create(outPath)
+			if err != nil {
+				return fmt.Errorf("creating output file %s: %w", outPath, err)
+			}
+			single := product
+			single.Package = pkgName
+			count, werr := fbc.GenerateFBC([]plcc.Product{single}, f, os.Stderr, writer)
+			cerr := f.Close()
+			if werr != nil {
+				_ = os.Remove(outPath)
+				return fmt.Errorf("writing package %s: %w", pkgName, werr)
+			}
+			if cerr != nil {
+				return fmt.Errorf("closing %s: %w", outPath, cerr)
+			}
+			if count == 0 {
+				_ = os.Remove(outPath)
+				return fmt.Errorf("package %s produced no FBC data", pkgName)
+			}
+			totalCount += count
 		}
-		pkgDir := filepath.Join(dir, product.Package)
-		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-			return fmt.Errorf("creating package directory %s: %w", pkgDir, err)
-		}
-		outPath := filepath.Join(pkgDir, filename)
-		f, err := os.Create(outPath)
-		if err != nil {
-			return fmt.Errorf("creating output file %s: %w", outPath, err)
-		}
-		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, os.Stderr, writer)
-		cerr := f.Close()
-		if werr != nil {
-			_ = os.Remove(outPath)
-			return fmt.Errorf("writing package %s: %w", product.Package, werr)
-		}
-		if cerr != nil {
-			return fmt.Errorf("closing %s: %w", outPath, cerr)
-		}
-		if count == 0 {
-			_ = os.Remove(outPath)
-			return fmt.Errorf("package %s produced no FBC data", product.Package)
-		}
-		totalCount += count
 	}
 
 	slog.Info("wrote split FBC data", "count", totalCount, "dir", dir)
@@ -265,12 +273,14 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 			filtered = append(filtered, product)
 			continue
 		}
-		if err := report.LogResults(os.Stderr, report.ValidationResult{
-			PackageName: product.Package,
-			Valid:       !strict,
-			Reasons:     warnings,
-		}); err != nil {
-			slog.Error("failed to write validation warnings", "package", product.Package, "error", err)
+		for _, pkgName := range product.Packages() {
+			if err := report.LogResults(os.Stderr, report.ValidationResult{
+				PackageName: strings.TrimSpace(pkgName),
+				Valid:       !strict,
+				Reasons:     warnings,
+			}); err != nil {
+				slog.Error("failed to write validation warnings", "package", pkgName, "error", err)
+			}
 		}
 		if !strict {
 			filtered = append(filtered, product)

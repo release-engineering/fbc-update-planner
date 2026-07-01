@@ -272,6 +272,33 @@ func TestRunSuccess(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "split creates separate dirs for comma-separated packages",
+			args: func(out string) []string {
+				f := filepath.Join(filepath.Dir(out), "multi.json")
+				_ = os.WriteFile(f, []byte(`{"data":[{"name":"Multi Operator","package":"alpha-op,beta-op","is_operator":true,"versions":[{"name":"1.0","phases":[{"name":"General availability","start_date":"2025-01-01T00:00:00.000Z","end_date":"2026-01-01T00:00:00.000Z","start_date_format":"date","end_date_format":"date"}],"tier":"Tier-1","openshift_compatibility":"4.16"}]}]}`), 0o644)
+				return []string{"plcc2fbc", "-i", f, "--permissive", "--split", filepath.Dir(out)}
+			},
+			skipFileCheck: true,
+			checks: func(t *testing.T, outFile string) {
+				dir := filepath.Dir(outFile)
+				for _, name := range []string{"alpha-op", "beta-op"} {
+					lf := filepath.Join(dir, name, "lifecycle.json")
+					info, err := os.Stat(lf)
+					if err != nil {
+						t.Errorf("lifecycle.json not found in %s: %v", name, err)
+						continue
+					}
+					if info.Size() == 0 {
+						t.Errorf("lifecycle.json is empty in %s", name)
+					}
+				}
+				commaDir := filepath.Join(dir, "alpha-op,beta-op")
+				if _, err := os.Stat(commaDir); err == nil {
+					t.Errorf("should not create directory with literal comma-separated name %q", commaDir)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

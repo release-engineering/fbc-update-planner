@@ -73,7 +73,7 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
   → catalog.SortByPackage()         # alphabetical
   → catalog.Validate()              # catalog-level PLCC validators (cross-product checks)
   → plcc.ValidateProduct()          # per-product PLCC validators (filter out failures; --permissive keeps them)
-  → fbc.GenerateFBC()               # translate + output cleanup + emit via PackageWriter
+  → fbc.GenerateFBC()               # translate (1 Product → N FBC Packages for comma-separated names) + output cleanup + emit via PackageWriter
 
 With --dump-plcc:
   → catalog.Dump()                  # write filtered PLCC JSON directly, skip FBC generation

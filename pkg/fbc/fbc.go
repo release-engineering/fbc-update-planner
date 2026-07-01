@@ -86,21 +86,32 @@ func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report
 	var failures []report.ValidationResult
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
-		pkg := newPackage(product)
-		reasons := pkg.Filter(filters...)
-		if len(reasons) > 0 {
-			failures = append(failures, report.ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     reasons,
-			})
-			continue
+		for _, pkgName := range product.Packages() {
+			pkgName = strings.TrimSpace(pkgName)
+			if pkgName == "" {
+				continue
+			}
+			pkg := newPackageWithName(product, pkgName)
+			reasons := pkg.Filter(filters...)
+			if len(reasons) > 0 {
+				failures = append(failures, report.ValidationResult{
+					PackageName: pkgName,
+					Valid:       false,
+					Reasons:     reasons,
+				})
+				continue
+			}
+			validPackages = append(validPackages, pkg)
 		}
-
-		validPackages = append(validPackages, pkg)
 	}
 
 	return validPackages, failures
+}
+
+func newPackageWithName(product plcc.Product, name string) *Package {
+	pkg := newPackage(product)
+	pkg.Name = name
+	return pkg
 }
 
 func newPackage(product plcc.Product) *Package {
