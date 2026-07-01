@@ -117,17 +117,13 @@ func run() error {
 			for _, name := range pkgErr.Names {
 				slog.Error("requested package not found in PLCC data", "package", name)
 			}
-		} else {
-			slog.Error("fatal error", "error", err)
 		}
 		return err
 	}
 
 	if dumpPLCC {
 		if err := catalog.Dump(writePath); err != nil {
-			err = fmt.Errorf("failed to write PLCC dump to %s: %w", writePath, err)
-			slog.Error("fatal error", "error", err)
-			return err
+			return fmt.Errorf("failed to write PLCC dump to %s: %w", writePath, err)
 		}
 		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
 		return nil
@@ -135,9 +131,7 @@ func run() error {
 
 	writer, err := fbc.NewPackageWriter(format)
 	if err != nil {
-		err = fmt.Errorf("invalid output format %q (allowed: json, json-pretty, yaml): %w", format, err)
-		slog.Error("fatal error", "error", err)
-		return err
+		return fmt.Errorf("invalid output format %q (allowed: json, json-pretty, yaml): %w", format, err)
 	}
 
 	var count int
@@ -149,8 +143,6 @@ func run() error {
 	if err != nil {
 		if errors.Is(err, errNoFBCOutput) {
 			slog.Error("no FBC data generated")
-		} else {
-			slog.Error("fatal error", "error", err)
 		}
 		return err
 	}

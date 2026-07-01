@@ -141,5 +141,5 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
 - Design choice: `newPackage()` silently converts unparseable timestamps to empty strings; PLCC validators catch data quality issues upstream, FBC filters then clean up the translated output
-- Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `main()` only handles exit codes; it prints to stderr only for fatal errors (exit code 1)
+- Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `run()` uses `slog.Error` only for exit-code-2/3 paths where `main()` is silent; for exit-code-1 errors, `run()` returns the error and `main()` prints it to stderr
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used
