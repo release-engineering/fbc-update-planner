@@ -114,6 +114,14 @@ func (d Date) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
+func (d Date) Equal(other Date) bool {
+	return d.t.Equal(other.t)
+}
+
+func (d Date) NextDay() Date {
+	return Date{t: d.t.AddDate(0, 0, 1)}
+}
+
 func (d *Date) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
