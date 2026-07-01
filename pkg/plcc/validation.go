@@ -42,6 +42,11 @@ const (
 	TierRolling  = "Rolling"
 )
 
+// PLCC version type values.
+const (
+	VersionTypeEndOfLife = "End of life"
+)
+
 var (
 	eusPhases       = []string{PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
 	majorMinorRegex = regexp.MustCompile(`^\d+\.\d+$`)
@@ -480,8 +485,9 @@ func ValidateReleaseCadence(p Product) []string {
 	return nil
 }
 
-// ValidateTierSelected checks that every version of an operator product has a
-// lifecycle tier selected. Non-operator products are skipped.
+// ValidateTierSelected checks that every non-EOL version of an operator product
+// has a lifecycle tier selected. Versions with type "End of life" and
+// non-operator products are skipped.
 // REQ-TIER-ALL-02
 func ValidateTierSelected(p Product) []string {
 	if !p.IsOperator {
@@ -489,6 +495,9 @@ func ValidateTierSelected(p Product) []string {
 	}
 	var reasons []string
 	for _, v := range p.Versions {
+		if v.Type == VersionTypeEndOfLife {
+			continue
+		}
 		tier := versionTier(v)
 		if tier == "" || tier == "N/A" || tier == "-" {
 			reasons = append(reasons, fmt.Sprintf("REQ-TIER-ALL-02: version %q: lifecycle tier not selected (tier=%q)", v.Name, v.Tier))

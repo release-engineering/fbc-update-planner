@@ -512,6 +512,16 @@ func TestValidateTierSelected(t *testing.T) {
 		{"operator N/A tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "N/A"}}}, false},
 		{"operator dash tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "-"}}}, false},
 		{"operator empty tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: ""}}}, false},
+		{"operator EOL version with no tier is skipped", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Type: "End of life", Tier: ""}}}, true},
+		{"operator non-EOL version with no tier fails", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Type: "Full Support", Tier: ""}}}, false},
+		{"operator EOL no-tier plus valid non-EOL passes", Product{IsOperator: true, Versions: []Version{
+			{Name: "1.0", Type: "End of life", Tier: ""},
+			{Name: "2.0", Type: "Full Support", Tier: "Aligned"},
+		}}, true},
+		{"operator EOL skipped but non-EOL no-tier fails", Product{IsOperator: true, Versions: []Version{
+			{Name: "1.0", Type: "End of life", Tier: ""},
+			{Name: "2.0", Type: "Full Support", Tier: ""},
+		}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

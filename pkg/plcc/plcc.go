@@ -46,6 +46,7 @@ type Product struct {
 // Version represents a product version with its lifecycle phases and platform compatibility.
 type Version struct {
 	Name                   string  `json:"name"`
+	Type                   string  `json:"type"`
 	Phases                 []Phase `json:"phases"`
 	OpenShiftCompatibility string  `json:"openshift_compatibility"`
 	Tier                   string  `json:"tier"`
