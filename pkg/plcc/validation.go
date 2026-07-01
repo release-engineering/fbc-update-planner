@@ -42,6 +42,11 @@ const (
 	TierRolling  = "Rolling"
 )
 
+// PLCC version type values.
+const (
+	VersionTypeEndOfLife = "End of life"
+)
+
 var (
 	eusPhases       = []string{PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
 	majorMinorRegex = regexp.MustCompile(`^\d+\.\d+$`)
@@ -489,6 +494,9 @@ func ValidateTierSelected(p Product) []string {
 	}
 	var reasons []string
 	for _, v := range p.Versions {
+		if v.Type == VersionTypeEndOfLife {
+			continue
+		}
 		tier := versionTier(v)
 		if tier == "" || tier == "N/A" || tier == "-" {
 			reasons = append(reasons, fmt.Sprintf("REQ-TIER-ALL-02: version %q: lifecycle tier not selected (tier=%q)", v.Name, v.Tier))
