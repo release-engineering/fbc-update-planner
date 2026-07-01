@@ -47,8 +47,8 @@ func TestTranslate(t *testing.T) {
 			}},
 		},
 		{
-			Name:    "Incomplete Phases",
-			Package: "incomplete-pkg",
+			Name:    "Unparseable Timestamp",
+			Package: "bad-timestamp-pkg",
 			Versions: []plcc.Version{{
 				Name: "1.0",
 				Phases: []plcc.Phase{
@@ -57,12 +57,26 @@ func TestTranslate(t *testing.T) {
 				},
 			}},
 		},
+		{
+			Name:    "Empty Dates",
+			Package: "empty-dates-pkg",
+			Versions: []plcc.Version{{
+				Name: "1.0",
+				Phases: []plcc.Phase{
+					{Name: "GA", StartDate: "", EndDate: "2025-01-01T00:00:00.000Z"},
+					{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+				},
+			}},
+		},
 	}
 
 	valid, failures := Translate(products, DefaultFilters()...)
 
-	if len(failures) != 0 {
-		t.Fatalf("got %d failures, want 0; failures: %v", len(failures), failures)
+	if len(failures) != 1 {
+		t.Fatalf("got %d failures, want 1; failures: %v", len(failures), failures)
+	}
+	if failures[0].PackageName != "bad-pkg" {
+		t.Errorf("failures[0] package = %q, want %q", failures[0].PackageName, "bad-pkg")
 	}
 	if len(valid) != 3 {
 		t.Fatalf("got %d valid packages, want 3", len(valid))
@@ -70,12 +84,19 @@ func TestTranslate(t *testing.T) {
 	if valid[0].Name != "valid-pkg" {
 		t.Errorf("valid[0] package name = %q, want %q", valid[0].Name, "valid-pkg")
 	}
-	if valid[1].Name != "bad-pkg" {
-		t.Errorf("valid[1] package name = %q, want %q", valid[1].Name, "bad-pkg")
+	// bad-timestamp-pkg: N/A start date becomes nil, GA phase stripped by FilterIncompletePhases
+	if valid[1].Name != "bad-timestamp-pkg" {
+		t.Errorf("valid[1] package name = %q, want %q", valid[1].Name, "bad-timestamp-pkg")
 	}
-	// incomplete-pkg: GA phase (N/A start) should be stripped by FilterIncompletePhases
+	if len(valid[1].Versions[0].Phases) != 1 {
+		t.Errorf("bad-timestamp-pkg: got %d phases, want 1 (GA should be stripped)", len(valid[1].Versions[0].Phases))
+	}
+	// empty-dates-pkg: empty start date becomes nil, GA phase stripped by FilterIncompletePhases
+	if valid[2].Name != "empty-dates-pkg" {
+		t.Errorf("valid[2] package name = %q, want %q", valid[2].Name, "empty-dates-pkg")
+	}
 	if len(valid[2].Versions[0].Phases) != 1 {
-		t.Errorf("incomplete-pkg: got %d phases, want 1 (GA should be stripped)", len(valid[2].Versions[0].Phases))
+		t.Errorf("empty-dates-pkg: got %d phases, want 1 (GA should be stripped)", len(valid[2].Versions[0].Phases))
 	}
 }
 

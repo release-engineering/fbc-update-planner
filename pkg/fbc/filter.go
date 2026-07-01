@@ -37,12 +37,12 @@ func (p *Package) Filter(filters ...Filter) []string {
 	return nil
 }
 
-// FilterIncompletePhases removes phases where either date is empty from all versions.
+// FilterIncompletePhases removes phases where either date is nil from all versions.
 func FilterIncompletePhases(p *Package) []string {
 	for i := range p.Versions {
 		filtered := p.Versions[i].Phases[:0]
 		for _, ph := range p.Versions[i].Phases {
-			if ph.StartDate != "" && ph.EndDate != "" {
+			if ph.StartDate != nil && ph.EndDate != nil {
 				filtered = append(filtered, ph)
 			}
 		}

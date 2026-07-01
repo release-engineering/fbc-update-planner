@@ -57,16 +57,17 @@ func TestNewPackageWriter(t *testing.T) {
 	}
 }
 
-func samplePackage(name string) *Package {
+func samplePackage(t *testing.T, name string) *Package {
+	t.Helper()
 	return &Package{
 		Schema: Schema,
 		Name:   name,
 		Versions: []Version{{
-			Name: "1.0",
+			Name: mustParseMajorMinor(t, "1.0"),
 			Phases: []Phase{{
 				Name:      "Full support",
-				StartDate: "2025-01-01",
-				EndDate:   "2025-06-30",
+				StartDate: datePtr(t, "2025-01-01"),
+				EndDate:   datePtr(t, "2025-06-30"),
 			}},
 		}},
 	}
@@ -175,16 +176,16 @@ func TestWriters(t *testing.T) {
 	}{
 		// JSONWriter
 		{name: "json/zero packages", writer: JSONWriter{}, packages: nil, want: ""},
-		{name: "json/single package", writer: JSONWriter{}, packages: []*Package{samplePackage("test-op")}, want: jsonSingle},
-		{name: "json/multiple packages", writer: JSONWriter{}, packages: []*Package{samplePackage("op-a"), samplePackage("op-b")}, want: jsonMulti},
+		{name: "json/single package", writer: JSONWriter{}, packages: []*Package{samplePackage(t, "test-op")}, want: jsonSingle},
+		{name: "json/multiple packages", writer: JSONWriter{}, packages: []*Package{samplePackage(t, "op-a"), samplePackage(t, "op-b")}, want: jsonMulti},
 		// JSONPrettyWriter
 		{name: "json-pretty/zero packages", writer: JSONPrettyWriter{}, packages: nil, want: ""},
-		{name: "json-pretty/single package", writer: JSONPrettyWriter{}, packages: []*Package{samplePackage("test-op")}, want: prettySingle},
-		{name: "json-pretty/multiple packages", writer: JSONPrettyWriter{}, packages: []*Package{samplePackage("test-op"), samplePackage("op-b")}, want: prettyMulti},
+		{name: "json-pretty/single package", writer: JSONPrettyWriter{}, packages: []*Package{samplePackage(t, "test-op")}, want: prettySingle},
+		{name: "json-pretty/multiple packages", writer: JSONPrettyWriter{}, packages: []*Package{samplePackage(t, "test-op"), samplePackage(t, "op-b")}, want: prettyMulti},
 		// YAMLWriter
 		{name: "yaml/zero packages", writer: YAMLWriter{}, packages: nil, want: ""},
-		{name: "yaml/single package", writer: YAMLWriter{}, packages: []*Package{samplePackage("test-op")}, want: yamlSingle},
-		{name: "yaml/multiple packages", writer: YAMLWriter{}, packages: []*Package{samplePackage("op-a"), samplePackage("op-b")}, want: yamlMulti},
+		{name: "yaml/single package", writer: YAMLWriter{}, packages: []*Package{samplePackage(t, "test-op")}, want: yamlSingle},
+		{name: "yaml/multiple packages", writer: YAMLWriter{}, packages: []*Package{samplePackage(t, "op-a"), samplePackage(t, "op-b")}, want: yamlMulti},
 	}
 
 	for _, tt := range tests {
@@ -207,7 +208,7 @@ func (errWriter) Write([]byte) (int, error) {
 }
 
 func TestWriterErrorPaths(t *testing.T) {
-	pkg := samplePackage("test-op")
+	pkg := samplePackage(t, "test-op")
 	writers := []struct {
 		name   string
 		writer PackageWriter
