@@ -77,10 +77,10 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
   → catalog.SortByPackage()         # alphabetical
   → catalog.Validate()              # catalog-level PLCC validators (cross-product checks)
   → plcc.ValidateProduct()          # per-product PLCC validators (filter out failures; --permissive keeps them)
-  → fbc.GenerateFBC()               # translate all + filter + write via PackageWriter
+  → fbc.GenerateFBC()               # translate (1 Product → N FBC Packages for comma-separated names) + filter + write via PackageWriter
 
 With --split:
-  → fbc.TranslateProduct()          # per product: convert + filter, fail-fast on first error
+  → fbc.TranslateProduct()          # per product per package name: convert + filter, fail-fast on first error
   → writer.Write()                  # write each package to <dir>/<package>/lifecycle.{json,yaml}
 
 With --dump-plcc:
