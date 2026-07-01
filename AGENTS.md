@@ -52,7 +52,7 @@ No separate lint command — CI runs `golangci-lint` with defaults (no `.golangc
 plcc2fbc [flags] <output-path>
 
 -o, --output        Output format: json, json-pretty, or yaml (default: json)
--l, --log           Write operational logs to a file (default: stdout)
+-l, --log           Write validation/filtering report to a file (default: stderr)
 -p, --package       Comma-separated package names to process (default: all)
 -i, --input         Read PLCC JSON from a file instead of fetching from API
     --dump-plcc     Dump filtered PLCC JSON instead of generating FBC
@@ -94,7 +94,7 @@ With --dump-plcc:
 - `fbc.Package` / `fbc.Version` / `fbc.Phase` / `fbc.Platform` — output-side types
 - `fbc.Filter` — `func(*Package) []string` — output cleanup pipeline callback
 - `fbc.PackageWriter` — interface for serializing packages (JSON, JSON-pretty, YAML)
-- `report.ValidationResult` — structured JSON logged to stderr for rejected/warned packages
+- `report.ValidationResult` — structured JSON logged to stderr (or to a file via `-l`) for rejected/warned packages
 
 ### FBC Schema
 
@@ -141,5 +141,5 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
 - Design choice: `newPackage()` silently converts unparseable timestamps to empty strings; PLCC validators catch data quality issues upstream, FBC filters then clean up the translated output
-- Error logging pattern: all structured `slog` logging happens in `run()` and its callees (while the log file is still open). `run()` logs every error via `slog` before returning it. `main()` only handles exit codes; it prints to stderr only for fatal errors (exit code 1), since those may occur before `slog` is configured
+- Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `main()` only handles exit codes; it prints to stderr only for fatal errors (exit code 1)
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used
