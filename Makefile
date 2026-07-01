@@ -10,7 +10,7 @@ plcc2fbc:
 
 .PHONY: test
 test:
-	go test -v ./...
+	go test -v -count 1 ./...
 
 .PHONY: generate-fbc
 generate-fbc: plcc2fbc
