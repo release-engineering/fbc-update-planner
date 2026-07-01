@@ -48,11 +48,11 @@ func TestFilter(t *testing.T) {
 
 func TestFilterIncompletePhases(t *testing.T) {
 	pkg := &Package{Versions: []Version{{
-		Name: "1.0",
+		Name: mustParseMajorMinor(t, "1.0"),
 		Phases: []Phase{
-			{Name: "GA", StartDate: "", EndDate: "2025-01-01"},
-			{Name: "Full support", StartDate: "2025-01-01", EndDate: "2025-12-31"},
-			{Name: "EOL", StartDate: "2025-12-31", EndDate: ""},
+			{Name: "GA", StartDate: nil, EndDate: datePtr(t, "2025-01-01")},
+			{Name: "Full support", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")},
+			{Name: "EOL", StartDate: datePtr(t, "2025-12-31"), EndDate: nil},
 		},
 	}}}
 
@@ -68,4 +68,3 @@ func TestFilterIncompletePhases(t *testing.T) {
 		t.Errorf("expected 'Full support' kept, got %q", pkg.Versions[0].Phases[0].Name)
 	}
 }
-

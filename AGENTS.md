@@ -20,6 +20,8 @@ pkg/plcc/plcc.go              PLCC API client, data types, filtering, sorting
 pkg/plcc/validation.go        PLCC validator registry — per-product and catalog-level checks
 pkg/plcc/plcc_test.go         Tests for PLCC package
 pkg/plcc/validation_test.go   Tests for PLCC validators
+pkg/fbc/doc.go                Package documentation
+pkg/fbc/types.go              Structured FBC types: MajorMinor, Date
 pkg/fbc/fbc.go                FBC schema, PLCC→FBC translation, GenerateFBC()
 pkg/fbc/fbc_test.go           Tests for FBC translation
 pkg/fbc/filter.go             Output cleanup pipeline — mutation-only filters
@@ -40,7 +42,7 @@ fbc-samples/                  Generated FBC snapshots (YAML, logs, validation lo
 
 ```sh
 make build          # → bin/plcc2fbc
-make test           # go test -v ./...
+make test           # go test -v -count 1 ./...
 make generate-fbc   # build + run against live PLCC API, write YAML + logs to fbc-samples/
 ```
 
@@ -92,6 +94,8 @@ With --dump-plcc:
 - `plcc.Validator` — `func(Product) []string` — per-product validator callback
 - `plcc.CatalogValidator` — `func([]Product) CatalogRejections` — cross-product validator
 - `fbc.Package` / `fbc.Version` / `fbc.Phase` / `fbc.Platform` — output-side types
+- `fbc.MajorMinor` — structured MAJOR.MINOR version (regex-validated, no leading zeros)
+- `fbc.Date` — structured YYYY-MM-DD date; `*Date` fields use nil for absent dates
 - `fbc.Filter` — `func(*Package) []string` — output cleanup pipeline callback
 - `fbc.PackageWriter` — interface for serializing packages (JSON, JSON-pretty, YAML)
 - `report.ValidationResult` — structured JSON logged to stderr (or to a file via `-l`) for rejected/warned packages
@@ -131,7 +135,7 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 - PLCC API uses ISO8601 with milliseconds: `2025-11-11T00:00:00.000Z`
 - FBC output uses `YYYY-MM-DD`
-- `"N/A"` or empty timestamps translate to empty strings (lenient parsing)
+- `"N/A"` or empty timestamps translate to nil (omitted from output)
 
 ## Gotchas
 
@@ -140,6 +144,6 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - All `.go` files must have the Apache 2.0 license header
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
-- Design choice: `newPackage()` silently converts unparseable timestamps to empty strings; PLCC validators catch data quality issues upstream, FBC filters then clean up the translated output
+- Design choice: `newPackage()` returns errors for invalid data (malformed versions, unparseable timestamps); the FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
 - Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used

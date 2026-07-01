@@ -30,11 +30,11 @@ The default pipeline:
 
 | # | Function | Kind | Purpose |
 |---|----------|------|---------|
-| 1 | `FilterIncompletePhases` | mutate | Drop phases where either date is empty |
+| 1 | `FilterIncompletePhases` | mutate | Drop phases where either date is nil |
 
 #### `FilterIncompletePhases`
 
-Removes phases where either `startDate` or `endDate` is empty. This includes N/A phases (both empty) and point-in-time phases (one set, one empty).
+Removes phases where either `startDate` or `endDate` is nil. This includes N/A phases (both nil) and point-in-time phases (one set, one nil).
 
 This filter always returns `nil` — it mutates the package but never rejects it.
 
@@ -47,7 +47,7 @@ This filter always returns `nil` — it mutates the package but never rejects it
 | Product has no `package` | PLCC filtering | Silently skipped |
 | Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--permissive` warning only |
 | Package maps to multiple products | PLCC catalog validation | All copies removed; with `--permissive` warning only |
-| Phase with empty start or end date | Filter pipeline | Phase silently removed |
+| Phase with nil start or end date | Filter pipeline | Phase silently removed |
 
 ---
 
