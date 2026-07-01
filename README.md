@@ -20,7 +20,7 @@ bin/plcc2fbc [flags] <output-path>
 |------|-------------|
 | `-o, --output <format>` | Output format: `json`, `json-pretty`, or `yaml` (default: `json`) |
 | `-p, --package <names>` | Comma-separated package names to include (default: all) |
-| `-l, --log <file>` | Write operational logs to `<file>` (default: stdout) |
+| `-l, --log <file>` | Write validation/filtering report to `<file>` (default: stderr) |
 | `-i, --input <file>` | Read PLCC JSON input from `<file>` instead of fetching from API |
 | `--dump-plcc` | Dump filtered PLCC JSON instead of generating FBC |
 | `--permissive` | Keep packages that fail PLCC validation instead of filtering them out; also downgrades missing `-p` packages from error (exit 3) to warning |

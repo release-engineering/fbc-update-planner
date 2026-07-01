@@ -40,8 +40,10 @@ func main() {
 		var pkgErr *plcc.PackagesNotFoundError
 		switch {
 		case errors.As(err, &pkgErr):
+			fmt.Fprintln(os.Stderr, "Error: requested packages not found in PLCC data")
 			os.Exit(3)
 		case errors.Is(err, errNoFBCOutput):
+			fmt.Fprintln(os.Stderr, "Error:", err)
 			os.Exit(2)
 		default:
 			fmt.Fprintln(os.Stderr, "Error:", err)
@@ -50,7 +52,7 @@ func main() {
 	}
 }
 
-func run() error {
+func run() (err error) {
 	var format string
 	var logPath string
 	var packages string
@@ -97,7 +99,11 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("failed to create log file: %w", err)
 		}
-		defer func() { _ = lf.Close() }()
+		defer func() {
+			if cerr := lf.Close(); cerr != nil && err == nil {
+				err = fmt.Errorf("closing log file %s: %w", logPath, cerr)
+			}
+		}()
 		reportWriter = lf
 	}
 
@@ -141,9 +147,6 @@ func run() error {
 		count, err = writeFile(catalog.Data, writePath, writer, reportWriter)
 	}
 	if err != nil {
-		if errors.Is(err, errNoFBCOutput) {
-			slog.Error("no FBC data generated")
-		}
 		return err
 	}
 	slog.Info("wrote FBC data", "count", count, "path", writePath)
@@ -202,7 +205,7 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter, r
 
 	blobCount, err := fbc.GenerateFBC(products, f, reportWriter, writer)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("generating FBC output: %w", err)
 	}
 	if blobCount == 0 {
 		return 0, errNoFBCOutput
@@ -269,7 +272,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 				Valid:       !strict,
 				Reasons:     reasons,
 			}); err != nil {
-				slog.Error("failed to write catalog validation warnings", "package", pkg, "error", err)
+				return nil, fmt.Errorf("writing validation report for %s: %w", pkg, err)
 			}
 		}
 		if strict {
@@ -289,7 +292,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 			Valid:       !strict,
 			Reasons:     warnings,
 		}); err != nil {
-			slog.Error("failed to write validation warnings", "package", product.Package, "error", err)
+			return nil, fmt.Errorf("writing validation report for %s: %w", product.Package, err)
 		}
 		if !strict {
 			filtered = append(filtered, product)
