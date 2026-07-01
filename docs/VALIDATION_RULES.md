@@ -45,7 +45,7 @@ This filter always returns `nil` — it mutates the package but never rejects it
 | Condition | Stage | Effect |
 |---|---|---|
 | Product has no `package` | PLCC filtering | Silently skipped |
-| Package maps to multiple products | PLCC catalog validation | All copies removed; with `--permissive` warning only |
+| Package name appears in multiple products | PLCC catalog validation | All products containing the duplicated name removed (comma-separated names are expanded); with `--permissive` warning only |
 | Phase with empty start or end date | Filter pipeline | Phase silently removed |
 
 ---
@@ -92,7 +92,7 @@ Catalog validators are cross-product checks selectable via `--validators catalog
 
 | # | Function | Label | Purpose |
 |---|----------|-------|---------|
-| 1 | `ValidateNoDuplicates` | REQ-VAL-01 | No package name appears in multiple products |
+| 1 | `ValidateNoDuplicates` | REQ-VAL-01 | No package name appears in multiple products (comma-separated names are expanded before checking) |
 
 ---
 
