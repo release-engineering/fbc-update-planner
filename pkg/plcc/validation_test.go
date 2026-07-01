@@ -121,6 +121,97 @@ func TestListValidatorsIncludesCatalog(t *testing.T) {
 	}
 }
 
+// --- Pre-tier-model cutoff ---
+
+func TestPreTierModelVersionsSkipTierValidation(t *testing.T) {
+	preCutoff := Version{
+		Name: "1.0",
+		Tier: "Aligned",
+		Phases: []Phase{
+			{Name: "Full support", StartDate: "2020-01-01T00:00:00.000Z", EndDate: "2021-01-01T00:00:00.000Z"},
+		},
+	}
+	p := Product{
+		Package:        "my-operator",
+		IsOperator:     true,
+		ReleaseCadence: "4 months",
+		Versions:       []Version{preCutoff},
+	}
+	tierValidators := []struct {
+		name string
+		fn   Validator
+	}{
+		{"ValidateTierSelected", ValidateTierSelected},
+		{"ValidatePlatformAlignedPhases", ValidatePlatformAlignedPhases},
+		{"ValidatePlatformAlignedOCP", ValidatePlatformAlignedOCP},
+		{"ValidatePlatformAgnosticPhases", ValidatePlatformAgnosticPhases},
+		{"ValidateRollingStreamPhases", ValidateRollingStreamPhases},
+		{"ValidateRollingStreamForbiddenPhases", ValidateRollingStreamForbiddenPhases},
+		{"ValidateOCPFormat", ValidateOCPFormat},
+		{"ValidateOCPFormatAll", ValidateOCPFormatAll},
+	}
+	for _, tv := range tierValidators {
+		t.Run(tv.name, func(t *testing.T) {
+			if reasons := tv.fn(p); len(reasons) != 0 {
+				t.Errorf("expected pre-tier-model version to be skipped, got %v", reasons)
+			}
+		})
+	}
+}
+
+func TestPreTierModelVersionsEnforceUniversalInvariants(t *testing.T) {
+	preCutoff := Version{
+		Name: "bad-name",
+		Phases: []Phase{
+			{Name: "Full support", StartDate: "not-a-date", EndDate: "2020-06-30T00:00:00.000Z",
+				StartDateFormat: "string", EndDateFormat: "date"},
+		},
+	}
+	p := Product{Versions: []Version{preCutoff}}
+
+	if reasons := ValidateVersionNames(p); len(reasons) == 0 {
+		t.Error("expected ValidateVersionNames to reject bad name on pre-cutoff version")
+	}
+	if reasons := ValidateDatesClean(p); len(reasons) == 0 {
+		t.Error("expected ValidateDatesClean to reject dirty date on pre-cutoff version")
+	}
+	if reasons := ValidateDatesStatic(p); len(reasons) == 0 {
+		t.Error("expected ValidateDatesStatic to reject string-format date on pre-cutoff version")
+	}
+}
+
+func TestPostTierModelVersionsFullyValidated(t *testing.T) {
+	postCutoff := Version{
+		Name: "1.0",
+		Tier: "Aligned",
+		Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2024-06-30T00:00:00.000Z"},
+		},
+	}
+	p := Product{
+		Package:    "my-operator",
+		IsOperator: true,
+		Versions:   []Version{postCutoff},
+	}
+	reasons := ValidatePlatformAlignedPhases(p)
+	if len(reasons) == 0 {
+		t.Error("expected post-cutoff aligned version missing phases to be rejected")
+	}
+	reasons = ValidateTierSelected(p)
+	if len(reasons) != 0 {
+		t.Errorf("expected post-cutoff version with valid tier to pass, got %v", reasons)
+	}
+}
+
+func TestPreTierModelNoPhases(t *testing.T) {
+	v := Version{Name: "1.0", Tier: "Aligned"}
+	p := Product{IsOperator: true, Versions: []Version{v}}
+	reasons := ValidateTierSelected(p)
+	if len(reasons) != 0 {
+		t.Errorf("expected version with no phases to be treated as pre-tier-model, got %v", reasons)
+	}
+}
+
 // --- REQ-DATE-02 ---
 
 func TestValidateDatesStatic(t *testing.T) {
@@ -262,6 +353,9 @@ func TestValidatePlatformAlignedPhases(t *testing.T) {
 			{Name: PhaseEUSTerm3, StartDate: "2027-01-01T00:00:00.000Z", EndDate: "2027-06-30T00:00:00.000Z"},
 		}}}}, true},
 		{"non-aligned skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling"}}}, true},
+		{"pre-tier-model skipped", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2020-01-01T00:00:00.000Z", EndDate: "2020-06-30T00:00:00.000Z"},
+		}}}}, true},
 		{"phase present but N/A dates", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", Phases: []Phase{
 			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
 			{Name: PhaseMaintenance, StartDate: "N/A", EndDate: "N/A"},
@@ -301,10 +395,16 @@ func TestValidatePlatformAlignedOCP(t *testing.T) {
 		p      Product
 		wantOK bool
 	}{
-		{"OCP present", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.16"}}}, true},
+		{"OCP present", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.16", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, true},
 		{"non-aligned skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling"}}}, true},
-		{"missing OCP", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned"}}}, false},
-		{"OCP is N/A", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "N/A"}}}, false},
+		{"missing OCP", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
+		{"OCP is N/A", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "N/A", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -428,9 +528,10 @@ func TestValidateRollingStreamPhases(t *testing.T) {
 		}}}}, true},
 		{"non-rolling skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Aligned"}}}, true},
 		{"missing full support", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", Phases: []Phase{
-			{Name: PhaseGA},
+			{Name: PhaseGA, StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2024-01-01T00:00:00.000Z"},
 		}}}}, false},
 		{"full support with N/A dates", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", Phases: []Phase{
+			{Name: PhaseGA, StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2024-01-01T00:00:00.000Z"},
 			{Name: PhaseFullSupport, StartDate: "N/A", EndDate: "N/A"},
 		}}}}, false},
 		{"full support with only start date", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", Phases: []Phase{
@@ -456,14 +557,16 @@ func TestValidateRollingStreamForbiddenPhases(t *testing.T) {
 		wantOK bool
 	}{
 		{"no forbidden phases", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", Phases: []Phase{
-			{Name: PhaseFullSupport},
+			{Name: PhaseFullSupport, StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
 		}}}}, true},
 		{"non-rolling skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Aligned"}}}, true},
 		{"has maintenance", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", Phases: []Phase{
-			{Name: PhaseFullSupport}, {Name: PhaseMaintenance},
+			{Name: PhaseFullSupport, StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+			{Name: PhaseMaintenance},
 		}}}}, false},
 		{"has EUS phase", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", Phases: []Phase{
-			{Name: PhaseFullSupport}, {Name: PhaseEUSTerm1},
+			{Name: PhaseFullSupport, StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+			{Name: PhaseEUSTerm1},
 		}}}}, false},
 	}
 	for _, tt := range tests {
@@ -507,11 +610,22 @@ func TestValidateTierSelected(t *testing.T) {
 		p      Product
 		wantOK bool
 	}{
-		{"operator with Aligned", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "Aligned"}}}, true},
+		{"operator with Aligned", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "Aligned", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, true},
 		{"non-operator skipped", Product{IsOperator: false, Versions: []Version{{Name: "1.0", Tier: "N/A"}}}, true},
-		{"operator N/A tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "N/A"}}}, false},
-		{"operator dash tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "-"}}}, false},
-		{"operator empty tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: ""}}}, false},
+		{"operator N/A tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "N/A", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
+		{"operator dash tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "-", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
+		{"operator empty tier", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
+		{"pre-tier-model skipped", Product{IsOperator: true, Versions: []Version{{Name: "1.0", Tier: "", Phases: []Phase{
+			{Name: "Full support", StartDate: "2020-01-01T00:00:00.000Z", EndDate: "2021-01-01T00:00:00.000Z"},
+		}}}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -531,10 +645,14 @@ func TestValidateOCPFormat(t *testing.T) {
 		p      Product
 		wantOK bool
 	}{
-		{"valid format", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.12, 4.13"}}}, true},
+		{"valid format", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.12, 4.13", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, true},
 		{"non-aligned skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling", OpenShiftCompatibility: "bad"}}}, true},
 		{"N/A skipped", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "N/A"}}}, true},
-		{"invalid format", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.6 EUS"}}}, false},
+		{"invalid format", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.6 EUS", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -651,9 +769,13 @@ func TestValidateOCPFormatAll(t *testing.T) {
 		p      Product
 		wantOK bool
 	}{
-		{"valid on non-aligned", Product{Versions: []Version{{Name: "1.0", Tier: "Agnostic", OpenShiftCompatibility: "4.12"}}}, true},
+		{"valid on non-aligned", Product{Versions: []Version{{Name: "1.0", Tier: "Agnostic", OpenShiftCompatibility: "4.12", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, true},
 		{"aligned skipped", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "bad"}}}, true},
-		{"invalid on non-aligned", Product{Versions: []Version{{Name: "1.0", Tier: "Agnostic", OpenShiftCompatibility: "4.6 EUS"}}}, false},
+		{"invalid on non-aligned", Product{Versions: []Version{{Name: "1.0", Tier: "Agnostic", OpenShiftCompatibility: "4.6 EUS", Phases: []Phase{
+			{Name: "Full support", StartDate: "2024-01-01T00:00:00.000Z", EndDate: "2025-01-01T00:00:00.000Z"},
+		}}}}, false},
 		{"empty skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling"}}}, true},
 	}
 	for _, tt := range tests {
