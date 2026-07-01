@@ -62,7 +62,7 @@ func run() error {
 	var split bool
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
-	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file; parent directory must exist (default: stdout)")
+	flag.StringVarP(&logPath, "log", "l", "", "write validation/filtering report to a file; parent directory must exist (default: stderr)")
 	flag.StringVarP(&packages, "package", "p", "", "comma-separated package names to process (default: all)")
 	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
@@ -86,7 +86,9 @@ func run() error {
 		return fmt.Errorf("--dump-plcc and --split are mutually exclusive")
 	}
 
-	var logWriter io.Writer = os.Stdout
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	var reportWriter io.Writer = os.Stderr
 	if logPath != "" {
 		if err := validateOutputPath(logPath, false); err != nil {
 			return fmt.Errorf("invalid log path: %w", err)
@@ -96,9 +98,8 @@ func run() error {
 			return fmt.Errorf("failed to create log file: %w", err)
 		}
 		defer func() { _ = lf.Close() }()
-		logWriter = lf
+		reportWriter = lf
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(logWriter, nil)))
 
 	if flag.NArg() != 1 {
 		flag.Usage()
@@ -109,7 +110,7 @@ func run() error {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
 
-	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict)
+	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict, reportWriter)
 	if err != nil {
 		var pkgErr *plcc.PackagesNotFoundError
 		if errors.As(err, &pkgErr) {
@@ -141,9 +142,9 @@ func run() error {
 
 	var count int
 	if split {
-		count, err = writeSplit(catalog.Data, writePath, writer)
+		count, err = writeSplit(catalog.Data, writePath, writer, reportWriter)
 	} else {
-		count, err = writeFile(catalog.Data, writePath, writer)
+		count, err = writeFile(catalog.Data, writePath, writer, reportWriter)
 	}
 	if err != nil {
 		if errors.Is(err, errNoFBCOutput) {
@@ -157,7 +158,7 @@ func run() error {
 	return nil
 }
 
-func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) (int, error) {
+func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, reportWriter io.Writer) (int, error) {
 	if len(products) == 0 {
 		return 0, errNoFBCOutput
 	}
@@ -177,7 +178,7 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) (
 		if err != nil {
 			return 0, fmt.Errorf("creating output file %s: %w", outPath, err)
 		}
-		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, os.Stderr, writer)
+		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, reportWriter, writer)
 		cerr := f.Close()
 		if werr != nil {
 			_ = os.Remove(outPath)
@@ -196,7 +197,7 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) (
 	return len(products), nil
 }
 
-func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (count int, err error) {
+func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter, reportWriter io.Writer) (count int, err error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return 0, fmt.Errorf("creating output file %s: %w", path, err)
@@ -207,7 +208,7 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (
 		}
 	}()
 
-	blobCount, err := fbc.GenerateFBC(products, f, os.Stderr, writer)
+	blobCount, err := fbc.GenerateFBC(products, f, reportWriter, writer)
 	if err != nil {
 		return 0, err
 	}
@@ -217,7 +218,7 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (
 	return blobCount, nil
 }
 
-func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*plcc.Catalog, error) {
+func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, reportWriter io.Writer) (*plcc.Catalog, error) {
 	var catalog *plcc.Catalog
 	var err error
 	if inputPath != "" {
@@ -271,7 +272,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 	if len(catalogValidators) > 0 {
 		before := catalog.Len()
 		for pkg, reasons := range catalog.Validate(strict, catalogValidators...) {
-			if err := report.LogResults(os.Stderr, report.ValidationResult{
+			if err := report.LogResults(reportWriter, report.ValidationResult{
 				PackageName: pkg,
 				Valid:       !strict,
 				Reasons:     reasons,
@@ -291,7 +292,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 			filtered = append(filtered, product)
 			continue
 		}
-		if err := report.LogResults(os.Stderr, report.ValidationResult{
+		if err := report.LogResults(reportWriter, report.ValidationResult{
 			PackageName: product.Package,
 			Valid:       !strict,
 			Reasons:     warnings,
