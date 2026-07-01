@@ -255,7 +255,7 @@ func TestRunSuccess(t *testing.T) {
 		{
 			name: "split json",
 			args: func(out string) []string {
-				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nfd", "--permissive", "--split", filepath.Dir(out)}
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,odr-cluster-operator", "--permissive", "--split", filepath.Dir(out)}
 			},
 			skipFileCheck: true,
 			checks: func(t *testing.T, outFile string) {
