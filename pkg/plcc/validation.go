@@ -249,7 +249,14 @@ func (c *Catalog) Validate(strict bool, validators ...CatalogValidator) CatalogR
 	if strict && len(rejections) > 0 {
 		var filtered []Product
 		for _, p := range c.Data {
-			if _, rejected := rejections[p.Package]; !rejected {
+			rejected := false
+			for _, pkg := range p.Packages() {
+				if _, found := rejections[strings.TrimSpace(pkg)]; found {
+					rejected = true
+					break
+				}
+			}
+			if !rejected {
 				filtered = append(filtered, p)
 			}
 		}

@@ -64,6 +64,21 @@ func TestCatalogValidate(t *testing.T) {
 			t.Errorf("expected unique-pkg to survive, got %q", catalog.Data[0].Package)
 		}
 	})
+	t.Run("strict filters comma-separated duplicate", func(t *testing.T) {
+		catalog := &Catalog{Data: []Product{
+			{Package: "alpha,beta"}, {Package: "beta"}, {Package: "gamma"},
+		}}
+		reasons := catalog.Validate(true, ValidateNoDuplicates)
+		if _, ok := reasons["beta"]; !ok {
+			t.Errorf("expected rejection for 'beta', got %v", reasons)
+		}
+		if len(catalog.Data) != 1 {
+			t.Errorf("expected 1 product after filtering, got %d", len(catalog.Data))
+		}
+		if catalog.Data[0].Package != "gamma" {
+			t.Errorf("expected gamma to survive, got %q", catalog.Data[0].Package)
+		}
+	})
 }
 
 func TestLookupValidators(t *testing.T) {
@@ -557,6 +572,8 @@ func TestValidateNoDuplicates(t *testing.T) {
 		{"no duplicates", []Product{{Package: "a"}, {Package: "b"}}, true},
 		{"has duplicate", []Product{{Package: "a"}, {Package: "a"}}, false},
 		{"empty packages ignored", []Product{{Package: ""}, {Package: ""}}, true},
+		{"comma-separated duplicate", []Product{{Package: "a,b"}, {Package: "b"}}, false},
+		{"comma-separated no duplicate", []Product{{Package: "a,b"}, {Package: "c"}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
