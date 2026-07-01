@@ -52,7 +52,7 @@ No separate lint command — CI runs `golangci-lint` with defaults (no `.golangc
 plcc2fbc [flags] <output-path>
 
 -o, --output        Output format: json, json-pretty, or yaml (default: json)
--l, --log           Write operational logs to a file (default: stdout)
+-l, --log           Write validation/filtering report to a file (default: stderr)
 -p, --package       Comma-separated package names to process (default: all)
 -i, --input         Read PLCC JSON from a file instead of fetching from API
     --dump-plcc     Dump filtered PLCC JSON instead of generating FBC
@@ -68,7 +68,7 @@ plcc2fbc [flags] <output-path>
 
 ```
 PLCC API (or -i file) → plcc.Fetch()/Load()
-  → catalog.FilterByPackageNames()  # if -p flag set
+  → catalog.FilterByPackageNames()  # if -p flag set; returns PackagesNotFoundError on missing packages
   → catalog.FilterPackages()        # otherwise: drop products without package names
   → catalog.SortByPackage()         # alphabetical
   → catalog.Validate()              # catalog-level PLCC validators (cross-product checks)
@@ -88,12 +88,13 @@ With --dump-plcc:
 ### Key Types
 
 - `plcc.Catalog` / `plcc.Product` / `plcc.Version` / `plcc.Phase` — API-side types
+- `plcc.PackagesNotFoundError` — custom error returned by `FilterByPackageNames` when `-p` packages are missing
 - `plcc.Validator` — `func(Product) []string` — per-product validator callback
 - `plcc.CatalogValidator` — `func([]Product) CatalogRejections` — cross-product validator
 - `fbc.Package` / `fbc.Version` / `fbc.Phase` / `fbc.Platform` — output-side types
 - `fbc.Filter` — `func(*Package) []string` — output cleanup pipeline callback
 - `fbc.PackageWriter` — interface for serializing packages (JSON, JSON-pretty, YAML)
-- `report.ValidationResult` — structured JSON logged to stderr for rejected/warned packages
+- `report.ValidationResult` — structured JSON logged to stderr (or to a file via `-l`) for rejected/warned packages
 
 ### FBC Schema
 
@@ -134,9 +135,11 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 ## Gotchas
 
-- The CLI exits with code 2 if no valid FBC blobs are produced, and code 1 for other fatal errors — both are intentional
+- The CLI exits with code 1 for fatal errors, code 2 if no valid FBC blobs are produced, and code 3 if requested `-p` packages are not found (without `--permissive`) — all are intentional
 - `FilterIncompletePhases` mutates the package in place (drops phases) — it never rejects
 - All `.go` files must have the Apache 2.0 license header
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
 - Design choice: `newPackage()` silently converts unparseable timestamps to empty strings; PLCC validators catch data quality issues upstream, FBC filters then clean up the translated output
+- Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
+- All structured logging uses `log/slog` (JSON handler) — the `log` package is not used

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -34,18 +33,26 @@ import (
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
 )
 
-var errPackageNotFound = errors.New("no FBC data generated")
+var errNoFBCOutput = errors.New("no FBC data generated")
 
 func main() {
 	if err := run(); err != nil {
-		if errors.Is(err, errPackageNotFound) {
+		var pkgErr *plcc.PackagesNotFoundError
+		switch {
+		case errors.As(err, &pkgErr):
+			fmt.Fprintln(os.Stderr, "Error: requested packages not found in PLCC data")
+			os.Exit(3)
+		case errors.Is(err, errNoFBCOutput):
+			fmt.Fprintln(os.Stderr, "Error:", err)
 			os.Exit(2)
+		default:
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
 		}
-		log.Fatal(err)
 	}
 }
 
-func run() error {
+func run() (err error) {
 	var format string
 	var logPath string
 	var packages string
@@ -57,7 +64,7 @@ func run() error {
 	var split bool
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
-	flag.StringVarP(&logPath, "log", "l", "", "write operational logs to a file; parent directory must exist (default: stdout)")
+	flag.StringVarP(&logPath, "log", "l", "", "write validation/filtering report to a file; parent directory must exist (default: stderr)")
 	flag.StringVarP(&packages, "package", "p", "", "comma-separated package names to process (default: all)")
 	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
@@ -81,7 +88,9 @@ func run() error {
 		return fmt.Errorf("--dump-plcc and --split are mutually exclusive")
 	}
 
-	var logWriter io.Writer = os.Stdout
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	var reportWriter io.Writer = os.Stderr
 	if logPath != "" {
 		if err := validateOutputPath(logPath, false); err != nil {
 			return fmt.Errorf("invalid log path: %w", err)
@@ -90,10 +99,13 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("failed to create log file: %w", err)
 		}
-		defer func() { _ = lf.Close() }()
-		logWriter = lf
+		defer func() {
+			if cerr := lf.Close(); cerr != nil && err == nil {
+				err = fmt.Errorf("closing log file %s: %w", logPath, cerr)
+			}
+		}()
+		reportWriter = lf
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(logWriter, nil)))
 
 	if flag.NArg() != 1 {
 		flag.Usage()
@@ -104,15 +116,20 @@ func run() error {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
 
-	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict)
+	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict, reportWriter)
 	if err != nil {
+		var pkgErr *plcc.PackagesNotFoundError
+		if errors.As(err, &pkgErr) {
+			for _, name := range pkgErr.Names {
+				slog.Error("requested package not found in PLCC data", "package", name)
+			}
+		}
 		return err
 	}
 
 	if dumpPLCC {
 		if err := catalog.Dump(writePath); err != nil {
-			slog.Error("failed to write PLCC dump", "path", writePath, "error", err)
-			return err
+			return fmt.Errorf("failed to write PLCC dump to %s: %w", writePath, err)
 		}
 		slog.Info("wrote PLCC dump", "count", catalog.Len(), "path", writePath)
 		return nil
@@ -120,63 +137,65 @@ func run() error {
 
 	writer, err := fbc.NewPackageWriter(format)
 	if err != nil {
-		slog.Error("invalid output format", "flag", "-o", "value", format, "allowed", "json,json-pretty,yaml")
+		return fmt.Errorf("invalid output format %q (allowed: json, json-pretty, yaml): %w", format, err)
+	}
+
+	var count int
+	if split {
+		count, err = writeSplit(catalog.Data, writePath, writer, reportWriter)
+	} else {
+		count, err = writeFile(catalog.Data, writePath, writer, reportWriter)
+	}
+	if err != nil {
 		return err
 	}
-
-	if split {
-		return writeSplit(catalog.Data, writePath, writer)
-	}
-	return writeFile(catalog.Data, writePath, writer)
+	slog.Info("wrote FBC data", "count", count, "path", writePath)
+	return nil
 }
 
-func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter) error {
+func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, reportWriter io.Writer) (int, error) {
 	if len(products) == 0 {
-		slog.Warn("no FBC data generated")
-		return errPackageNotFound
+		return 0, errNoFBCOutput
 	}
 
 	filename := "lifecycle." + writer.Ext()
 
-	var totalCount int
 	for _, product := range products {
 		if !fs.ValidPath(product.Package) {
-			return fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
+			return 0, fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
 		}
 		pkgDir := filepath.Join(dir, product.Package)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-			return fmt.Errorf("creating package directory %s: %w", pkgDir, err)
+			return 0, fmt.Errorf("creating package directory %s: %w", pkgDir, err)
 		}
 		outPath := filepath.Join(pkgDir, filename)
 		f, err := os.Create(outPath)
 		if err != nil {
-			return fmt.Errorf("creating output file %s: %w", outPath, err)
+			return 0, fmt.Errorf("creating output file %s: %w", outPath, err)
 		}
-		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, os.Stderr, writer)
+		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, reportWriter, writer)
 		cerr := f.Close()
 		if werr != nil {
 			_ = os.Remove(outPath)
-			return fmt.Errorf("writing package %s: %w", product.Package, werr)
+			return 0, fmt.Errorf("writing package %s: %w", product.Package, werr)
 		}
 		if cerr != nil {
-			return fmt.Errorf("closing %s: %w", outPath, cerr)
+			return 0, fmt.Errorf("closing %s: %w", outPath, cerr)
 		}
-		if count == 0 {
+		// Safeguard: a single product should always produce exactly one FBC blob.
+		if count != 1 {
 			_ = os.Remove(outPath)
-			return fmt.Errorf("package %s produced no FBC data", product.Package)
+			return 0, fmt.Errorf("package %s produced %d FBC blobs, expected 1", product.Package, count)
 		}
-		totalCount += count
 	}
 
-	slog.Info("wrote split FBC data", "count", totalCount, "dir", dir)
-	return nil
+	return len(products), nil
 }
 
-func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (err error) {
+func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter, reportWriter io.Writer) (count int, err error) {
 	f, err := os.Create(path)
 	if err != nil {
-		slog.Error("failed to create output file", "path", path, "error", err)
-		return err
+		return 0, fmt.Errorf("creating output file %s: %w", path, err)
 	}
 	defer func() {
 		if cerr := f.Close(); cerr != nil && err == nil {
@@ -184,20 +203,17 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter) (
 		}
 	}()
 
-	blobCount, err := fbc.GenerateFBC(products, f, os.Stderr, writer)
+	blobCount, err := fbc.GenerateFBC(products, f, reportWriter, writer)
 	if err != nil {
-		slog.Error("failed to generate FBC", "error", err)
-		return err
+		return 0, fmt.Errorf("generating FBC output: %w", err)
 	}
 	if blobCount == 0 {
-		slog.Warn("no FBC data generated")
-		return errPackageNotFound
+		return 0, errNoFBCOutput
 	}
-	slog.Info("wrote FBC data", "count", blobCount, "path", path)
-	return nil
+	return blobCount, nil
 }
 
-func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*plcc.Catalog, error) {
+func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, reportWriter io.Writer) (*plcc.Catalog, error) {
 	var catalog *plcc.Catalog
 	var err error
 	if inputPath != "" {
@@ -206,8 +222,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 		catalog, err = plcc.Fetch()
 	}
 	if err != nil {
-		slog.Error("failed to load PLCC data", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("loading PLCC data: %w", err)
 	}
 
 	slog.Info("fetched products from PLCC", "count", catalog.Len())
@@ -219,9 +234,17 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 				names = append(names, name)
 			}
 		}
-		notFound := catalog.FilterByPackageNames(names)
-		for _, name := range notFound {
-			slog.Warn("requested package not found in PLCC data", "package", name)
+		if err := catalog.FilterByPackageNames(names); err != nil {
+			if strict {
+				return nil, err
+			}
+			var pkgErr *plcc.PackagesNotFoundError
+			if !errors.As(err, &pkgErr) {
+				return nil, err
+			}
+			for _, name := range pkgErr.Names {
+				slog.Warn("requested package not found in PLCC data", "package", name)
+			}
 		}
 	} else {
 		catalog.FilterPackages()
@@ -238,19 +261,18 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 	}
 	validators, catalogValidators, err := plcc.LookupValidators(validatorNames...)
 	if err != nil {
-		slog.Error("invalid --validators flag", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("invalid --validators flag: %w", err)
 	}
 
 	if len(catalogValidators) > 0 {
 		before := catalog.Len()
 		for pkg, reasons := range catalog.Validate(strict, catalogValidators...) {
-			if err := report.LogResults(os.Stderr, report.ValidationResult{
+			if err := report.LogResults(reportWriter, report.ValidationResult{
 				PackageName: pkg,
 				Valid:       !strict,
 				Reasons:     reasons,
 			}); err != nil {
-				slog.Error("failed to write catalog validation warnings", "package", pkg, "error", err)
+				return nil, fmt.Errorf("writing validation report for %s: %w", pkg, err)
 			}
 		}
 		if strict {
@@ -265,12 +287,12 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool) (*
 			filtered = append(filtered, product)
 			continue
 		}
-		if err := report.LogResults(os.Stderr, report.ValidationResult{
+		if err := report.LogResults(reportWriter, report.ValidationResult{
 			PackageName: product.Package,
 			Valid:       !strict,
 			Reasons:     warnings,
 		}); err != nil {
-			slog.Error("failed to write validation warnings", "package", product.Package, "error", err)
+			return nil, fmt.Errorf("writing validation report for %s: %w", product.Package, err)
 		}
 		if !strict {
 			filtered = append(filtered, product)
