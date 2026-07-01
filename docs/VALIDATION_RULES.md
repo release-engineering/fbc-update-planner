@@ -77,7 +77,7 @@ Validators are split into three groups: `SyntaxValidators()` (data format/struct
 | # | Function | Label | Purpose |
 |---|----------|-------|---------|
 | 1 | `ValidateReleaseCadence` | REQ-TIER-ALL-01 | Operators must have release cadence specified |
-| 2 | `ValidateTierSelected` | REQ-TIER-ALL-02 | Operator versions must have lifecycle tier selected |
+| 2 | `ValidateTierSelected` | REQ-TIER-ALL-02 | Non-EOL operator versions must have lifecycle tier selected |
 | 3 | `ValidatePlatformAlignedPhases` | REQ-TIER-PA-01 | Aligned: Full Support, Maintenance, EUS 1/2/3 with parseable dates |
 | 4 | `ValidatePlatformAlignedOCP` | REQ-TIER-PA-02 | Aligned: OCP compatibility must be specified |
 | 5 | `ValidatePlatformAgnosticPhases` | REQ-TIER-AG-01 | Agnostic: Full Support and Maintenance with parseable dates |
