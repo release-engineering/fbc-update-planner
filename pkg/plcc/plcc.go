@@ -39,6 +39,9 @@ func (e *PackagesNotFoundError) Error() string {
 // APIURL is the Red Hat Product Life Cycle API endpoint.
 const APIURL = "https://access.redhat.com/product-life-cycles/api/v2/products"
 
+// OCPProductName is the PLCC product name for OpenShift Container Platform.
+const OCPProductName = "Red Hat OpenShift Container Platform"
+
 // Catalog holds the product lifecycle data returned by the PLCC API.
 type Catalog struct {
 	Data []Product `json:"data"`
@@ -170,6 +173,17 @@ func (c *Catalog) FilterByPackageNames(names []string) error {
 	}
 	if len(notFound) > 0 {
 		return &PackagesNotFoundError{Names: notFound}
+	}
+	return nil
+}
+
+// FindProductByName returns a pointer to the first product matching the given
+// name, or nil if no match is found.
+func (c *Catalog) FindProductByName(name string) *Product {
+	for i := range c.Data {
+		if c.Data[i].Name == name {
+			return &c.Data[i]
+		}
 	}
 	return nil
 }

@@ -86,7 +86,7 @@ func TestLookupValidators(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prod, cat, err := LookupValidators(tt.input...)
+			prod, cat, err := LookupValidators(nil, tt.input...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -102,8 +102,8 @@ func TestLookupValidators(t *testing.T) {
 		})
 	}
 	t.Run("dedup does not duplicate validators", func(t *testing.T) {
-		syntaxOnly, _, _ := LookupValidators("syntax")
-		withDup, _, _ := LookupValidators("syntax", "REQ-DATE-02")
+		syntaxOnly, _, _ := LookupValidators(nil, "syntax")
+		withDup, _, _ := LookupValidators(nil, "syntax", "REQ-DATE-02")
 		if len(withDup) != len(syntaxOnly) {
 			t.Errorf("syntax,REQ-DATE-02 should equal syntax alone: got %d, want %d", len(withDup), len(syntaxOnly))
 		}
@@ -142,7 +142,7 @@ func TestPreTierModelVersionsSkipTierValidation(t *testing.T) {
 		fn   Validator
 	}{
 		{"ValidateTierSelected", ValidateTierSelected},
-		{"ValidatePlatformAlignedPhases", ValidatePlatformAlignedPhases},
+		{"ValidatePlatformAlignedPhases", ValidatePlatformAlignedPhases(nil)},
 		{"ValidatePlatformAlignedOCP", ValidatePlatformAlignedOCP},
 		{"ValidatePlatformAgnosticPhases", ValidatePlatformAgnosticPhases},
 		{"ValidateRollingStreamPhases", ValidateRollingStreamPhases},
@@ -193,7 +193,7 @@ func TestPostTierModelVersionsFullyValidated(t *testing.T) {
 		IsOperator: true,
 		Versions:   []Version{postCutoff},
 	}
-	reasons := ValidatePlatformAlignedPhases(p)
+	reasons := ValidatePlatformAlignedPhases(nil)(p)
 	if len(reasons) == 0 {
 		t.Error("expected post-cutoff aligned version missing phases to be rejected")
 	}
@@ -339,7 +339,8 @@ func TestValidateVersionNames(t *testing.T) {
 
 // --- REQ-TIER-PA-01 ---
 
-func TestValidatePlatformAlignedPhases(t *testing.T) {
+func TestValidatePlatformAlignedPhasesNilOCP(t *testing.T) {
+	validate := ValidatePlatformAlignedPhases(nil)
 	tests := []struct {
 		name   string
 		p      Product
@@ -379,12 +380,208 @@ func TestValidatePlatformAlignedPhases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reasons := ValidatePlatformAlignedPhases(tt.p)
+			reasons := validate(tt.p)
 			if (len(reasons) == 0) != tt.wantOK {
 				t.Errorf("ok = %v, want %v; reasons: %v", len(reasons) == 0, tt.wantOK, reasons)
 			}
 		})
 	}
+}
+
+func TestParseOCPVersions(t *testing.T) {
+	tests := []struct {
+		name string
+		ocp  string
+		want []string
+	}{
+		{"single", "4.16", []string{"4.16"}},
+		{"multi", "4.14, 4.16", []string{"4.14", "4.16"}},
+		{"N/A", "N/A", nil},
+		{"empty", "", nil},
+		{"whitespace only", "  ", nil},
+		{"trailing comma", "4.16,", []string{"4.16"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseOCPVersions(tt.ocp)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("index %d: got %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestResolveRequiredPhases(t *testing.T) {
+	allFive := []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
+	baseTwo := []string{PhaseFullSupport, PhaseMaintenance}
+
+	ocpProduct := &Product{
+		Name: OCPProductName,
+		Versions: []Version{
+			{Name: "4.16", Phases: []Phase{
+				{Name: PhaseFullSupport, StartDate: "2024-06-27T00:00:00.000Z", EndDate: "2024-12-27T00:00:00.000Z"},
+				{Name: PhaseMaintenance, StartDate: "2024-12-28T00:00:00.000Z", EndDate: "2025-06-27T00:00:00.000Z"},
+				{Name: PhaseEUSTerm1, StartDate: "2025-06-28T00:00:00.000Z", EndDate: "2025-12-27T00:00:00.000Z"},
+				{Name: PhaseEUSTerm2, StartDate: "2025-12-28T00:00:00.000Z", EndDate: "2026-12-27T00:00:00.000Z"},
+				{Name: PhaseEUSTerm3, StartDate: "N/A", EndDate: "N/A"},
+			}},
+			{Name: "4.17", Phases: []Phase{
+				{Name: PhaseFullSupport, StartDate: "2024-10-01T00:00:00.000Z", EndDate: "2025-04-01T00:00:00.000Z"},
+				{Name: PhaseMaintenance, StartDate: "2025-04-02T00:00:00.000Z", EndDate: "2025-10-01T00:00:00.000Z"},
+				{Name: PhaseEUSTerm1, StartDate: "N/A", EndDate: "N/A"},
+				{Name: PhaseEUSTerm2, StartDate: "N/A", EndDate: "N/A"},
+				{Name: PhaseEUSTerm3, StartDate: "N/A", EndDate: "N/A"},
+			}},
+		},
+	}
+
+	tests := []struct {
+		name string
+		ocp  *Product
+		v    Version
+		want []string
+	}{
+		{"even OCP version with EUS", ocpProduct, Version{OpenShiftCompatibility: "4.16"}, []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2}},
+		{"odd OCP version no EUS", ocpProduct, Version{OpenShiftCompatibility: "4.17"}, baseTwo},
+		{"nil OCP product", nil, Version{OpenShiftCompatibility: "4.16"}, allFive},
+		{"OCP version not found", ocpProduct, Version{OpenShiftCompatibility: "4.99"}, allFive},
+		{"empty OCP compat", ocpProduct, Version{OpenShiftCompatibility: ""}, allFive},
+		{"N/A OCP compat", ocpProduct, Version{OpenShiftCompatibility: "N/A"}, allFive},
+		{"multi OCP with EUS version", ocpProduct, Version{OpenShiftCompatibility: "4.16, 4.17"}, []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveRequiredPhases(tt.ocp, tt.v)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("index %d: got %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestValidatePlatformAlignedPhasesWithOCP(t *testing.T) {
+	ocpProduct := &Product{
+		Name: OCPProductName,
+		Versions: []Version{
+			{Name: "4.16", Phases: []Phase{
+				{Name: PhaseFullSupport, StartDate: "2024-06-27T00:00:00.000Z", EndDate: "2024-12-27T00:00:00.000Z"},
+				{Name: PhaseMaintenance, StartDate: "2024-12-28T00:00:00.000Z", EndDate: "2025-06-27T00:00:00.000Z"},
+				{Name: PhaseEUSTerm1, StartDate: "2025-06-28T00:00:00.000Z", EndDate: "2025-12-27T00:00:00.000Z"},
+				{Name: PhaseEUSTerm2, StartDate: "2025-12-28T00:00:00.000Z", EndDate: "2026-12-27T00:00:00.000Z"},
+				{Name: PhaseEUSTerm3, StartDate: "N/A", EndDate: "N/A"},
+			}},
+			{Name: "4.17", Phases: []Phase{
+				{Name: PhaseFullSupport, StartDate: "2024-10-01T00:00:00.000Z", EndDate: "2025-04-01T00:00:00.000Z"},
+				{Name: PhaseMaintenance, StartDate: "2025-04-02T00:00:00.000Z", EndDate: "2025-10-01T00:00:00.000Z"},
+				{Name: PhaseEUSTerm1, StartDate: "N/A", EndDate: "N/A"},
+				{Name: PhaseEUSTerm2, StartDate: "N/A", EndDate: "N/A"},
+				{Name: PhaseEUSTerm3, StartDate: "N/A", EndDate: "N/A"},
+			}},
+		},
+	}
+
+	validate := ValidatePlatformAlignedPhases(ocpProduct)
+
+	tests := []struct {
+		name   string
+		p      Product
+		wantOK bool
+	}{
+		{"even OCP: all required phases present", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.16", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: PhaseMaintenance, StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+			{Name: PhaseEUSTerm1, StartDate: "2026-01-01T00:00:00.000Z", EndDate: "2026-06-30T00:00:00.000Z"},
+			{Name: PhaseEUSTerm2, StartDate: "2026-07-01T00:00:00.000Z", EndDate: "2026-12-31T00:00:00.000Z"},
+			{Name: PhaseEUSTerm3, StartDate: "N/A", EndDate: "N/A"},
+		}}}}, true},
+		{"odd OCP: only base phases required", Product{Versions: []Version{{Name: "4.17", Tier: "Aligned", OpenShiftCompatibility: "4.17", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: PhaseMaintenance, StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+			{Name: PhaseEUSTerm1, StartDate: "N/A", EndDate: "N/A"},
+			{Name: PhaseEUSTerm2, StartDate: "N/A", EndDate: "N/A"},
+			{Name: PhaseEUSTerm3, StartDate: "N/A", EndDate: "N/A"},
+		}}}}, true},
+		{"odd OCP: fails if base phase missing", Product{Versions: []Version{{Name: "4.17", Tier: "Aligned", OpenShiftCompatibility: "4.17", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: PhaseMaintenance, StartDate: "N/A", EndDate: "N/A"},
+		}}}}, false},
+		{"non-aligned skipped", Product{Versions: []Version{{Name: "1.0", Tier: "Rolling"}}}, true},
+		{"pre-tier-model skipped", Product{Versions: []Version{{Name: "4.16", Tier: "Aligned", OpenShiftCompatibility: "4.16", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2020-01-01T00:00:00.000Z", EndDate: "2020-06-30T00:00:00.000Z"},
+		}}}}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasons := validate(tt.p)
+			if (len(reasons) == 0) != tt.wantOK {
+				t.Errorf("ok = %v, want %v; reasons: %v", len(reasons) == 0, tt.wantOK, reasons)
+			}
+		})
+	}
+
+	t.Run("nil OCP falls back to all-required", func(t *testing.T) {
+		fallback := ValidatePlatformAlignedPhases(nil)
+		p := Product{Versions: []Version{{Name: "4.17", Tier: "Aligned", OpenShiftCompatibility: "4.17", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: PhaseMaintenance, StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+		}}}}
+		reasons := fallback(p)
+		if len(reasons) == 0 {
+			t.Error("expected nil OCP to require all phases including EUS, but got no reasons")
+		}
+	})
+}
+
+func TestLookupValidatorsWithDeps(t *testing.T) {
+	t.Run("with OCP context", func(t *testing.T) {
+		ocpProduct := &Product{
+			Name: OCPProductName,
+			Versions: []Version{{Name: "4.17", Phases: []Phase{
+				{Name: PhaseFullSupport, StartDate: "2024-10-01T00:00:00.000Z", EndDate: "2025-04-01T00:00:00.000Z"},
+				{Name: PhaseMaintenance, StartDate: "2025-04-02T00:00:00.000Z", EndDate: "2025-10-01T00:00:00.000Z"},
+				{Name: PhaseEUSTerm1, StartDate: "N/A", EndDate: "N/A"},
+			}}},
+		}
+		deps := &ValidatorDeps{OCPProduct: ocpProduct}
+		validators, _, err := LookupValidators(deps, "REQ-TIER-PA-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(validators) != 1 {
+			t.Fatalf("expected 1 validator, got %d", len(validators))
+		}
+		p := Product{Versions: []Version{{Name: "4.17", Tier: "Aligned", OpenShiftCompatibility: "4.17", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: PhaseMaintenance, StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+		}}}}
+		if reasons := validators[0](p); len(reasons) != 0 {
+			t.Errorf("OCP-aware validator should pass odd version without EUS, got %v", reasons)
+		}
+	})
+
+	t.Run("nil deps requires all phases", func(t *testing.T) {
+		validators, _, err := LookupValidators(nil, "REQ-TIER-PA-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := Product{Versions: []Version{{Name: "4.17", Tier: "Aligned", OpenShiftCompatibility: "4.17", Phases: []Phase{
+			{Name: PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+			{Name: PhaseMaintenance, StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+		}}}}
+		if reasons := validators[0](p); len(reasons) == 0 {
+			t.Error("nil deps should require EUS on odd version, but passed")
+		}
+	})
 }
 
 // --- REQ-TIER-PA-02 ---

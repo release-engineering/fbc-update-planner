@@ -104,10 +104,16 @@ func catalogValidatorsByGroup(group string) []CatalogValidator {
 	return result
 }
 
+// ValidatorDeps holds runtime dependencies for validators that need them.
+type ValidatorDeps struct {
+	OCPProduct *Product
+}
+
 type validatorEntry struct {
 	Label      string
 	Group      string // "syntax" or "semantic"
 	Validators []Validator
+	Init       func(*ValidatorDeps) []Validator
 }
 
 type catalogValidatorEntry struct {
@@ -119,24 +125,24 @@ type catalogValidatorEntry struct {
 // validatorRegistry is the single source of truth for all validator labels,
 // their group, and their implementing functions. Order is preserved.
 var validatorRegistry = []validatorEntry{
-	{"REQ-DATE-02", "syntax", []Validator{ValidateDatesStatic}},
-	{"REQ-DATE-03", "syntax", []Validator{ValidateDatesClean}},
-	{"REQ-DATE-04", "syntax", []Validator{ValidateDatesContiguity}},
-	{"REQ-VER-01", "syntax", []Validator{ValidateVersionNames}},
-	{"REQ-TIER-PA-01", "semantic", []Validator{ValidatePlatformAlignedPhases}},
-	{"REQ-TIER-PA-02", "semantic", []Validator{ValidatePlatformAlignedOCP}},
-	{"REQ-TIER-AG-01", "semantic", []Validator{ValidatePlatformAgnosticPhases}},
-	{"REQ-TIER-AG-03", "semantic", []Validator{ValidatePlatformAgnosticEUSPhases}},
-	{"REQ-TIER-AG-04", "semantic", []Validator{ValidatePlatformAgnosticEUSOCP}},
-	{"REQ-TIER-RS-01", "semantic", []Validator{ValidateRollingStreamPhases}},
-	{"REQ-TIER-RS-02", "semantic", []Validator{ValidateRollingStreamForbiddenPhases}},
-	{"REQ-TIER-ALL-01", "semantic", []Validator{ValidateReleaseCadence}},
-	{"REQ-TIER-ALL-02", "semantic", []Validator{ValidateTierSelected}},
-	{"REQ-FIELD-02", "syntax", []Validator{ValidateOCPFormat}},
-	{"CUSTOM-01", "syntax", []Validator{ValidateIsOperator}},
-	{"CUSTOM-02", "syntax", []Validator{ValidateHasVersions}},
-	{"CUSTOM-03", "syntax", []Validator{ValidatePhaseEndAfterStart}},
-	{"CUSTOM-04", "syntax", []Validator{ValidateOCPFormatAll}},
+	{"REQ-DATE-02", "syntax", []Validator{ValidateDatesStatic}, nil},
+	{"REQ-DATE-03", "syntax", []Validator{ValidateDatesClean}, nil},
+	{"REQ-DATE-04", "syntax", []Validator{ValidateDatesContiguity}, nil},
+	{"REQ-VER-01", "syntax", []Validator{ValidateVersionNames}, nil},
+	{"REQ-TIER-PA-01", "semantic", nil, initPlatformAlignedPhases},
+	{"REQ-TIER-PA-02", "semantic", []Validator{ValidatePlatformAlignedOCP}, nil},
+	{"REQ-TIER-AG-01", "semantic", []Validator{ValidatePlatformAgnosticPhases}, nil},
+	{"REQ-TIER-AG-03", "semantic", []Validator{ValidatePlatformAgnosticEUSPhases}, nil},
+	{"REQ-TIER-AG-04", "semantic", []Validator{ValidatePlatformAgnosticEUSOCP}, nil},
+	{"REQ-TIER-RS-01", "semantic", []Validator{ValidateRollingStreamPhases}, nil},
+	{"REQ-TIER-RS-02", "semantic", []Validator{ValidateRollingStreamForbiddenPhases}, nil},
+	{"REQ-TIER-ALL-01", "semantic", []Validator{ValidateReleaseCadence}, nil},
+	{"REQ-TIER-ALL-02", "semantic", []Validator{ValidateTierSelected}, nil},
+	{"REQ-FIELD-02", "syntax", []Validator{ValidateOCPFormat}, nil},
+	{"CUSTOM-01", "syntax", []Validator{ValidateIsOperator}, nil},
+	{"CUSTOM-02", "syntax", []Validator{ValidateHasVersions}, nil},
+	{"CUSTOM-03", "syntax", []Validator{ValidatePhaseEndAfterStart}, nil},
+	{"CUSTOM-04", "syntax", []Validator{ValidateOCPFormatAll}, nil},
 }
 
 var catalogValidatorRegistry = []catalogValidatorEntry{
@@ -147,8 +153,34 @@ var catalogValidatorRegistry = []catalogValidatorEntry{
 // and catalog validators.
 // Accepted group names: "all", "syntax", "semantic", "catalog".
 // Accepted labels: any label in either registry (e.g. "REQ-DATE-03", "REQ-VAL-01").
+// deps supplies runtime context to validators that need it (may be nil).
 // Returns an error if any name is unknown.
-func LookupValidators(names ...string) ([]Validator, []CatalogValidator, error) {
+func LookupValidators(deps *ValidatorDeps, names ...string) ([]Validator, []CatalogValidator, error) {
+	labels, err := resolveLabels(names)
+	if err != nil {
+		return nil, nil, err
+	}
+	var prodResult []Validator
+	for _, e := range validatorRegistry {
+		if !labels[e.Label] {
+			continue
+		}
+		if e.Init != nil {
+			prodResult = append(prodResult, e.Init(deps)...)
+		} else {
+			prodResult = append(prodResult, e.Validators...)
+		}
+	}
+	var catResult []CatalogValidator
+	for _, e := range catalogValidatorRegistry {
+		if labels[e.Label] {
+			catResult = append(catResult, e.Validators...)
+		}
+	}
+	return prodResult, catResult, nil
+}
+
+func resolveLabels(names []string) (map[string]bool, error) {
 	labels := make(map[string]bool)
 	for _, name := range names {
 		switch name {
@@ -188,24 +220,12 @@ func LookupValidators(names ...string) ([]Validator, []CatalogValidator, error) 
 				}
 			}
 			if !found {
-				return nil, nil, fmt.Errorf("unknown validator %q", name)
+				return nil, fmt.Errorf("unknown validator %q", name)
 			}
 			labels[name] = true
 		}
 	}
-	var prodResult []Validator
-	for _, e := range validatorRegistry {
-		if labels[e.Label] {
-			prodResult = append(prodResult, e.Validators...)
-		}
-	}
-	var catResult []CatalogValidator
-	for _, e := range catalogValidatorRegistry {
-		if labels[e.Label] {
-			catResult = append(catResult, e.Validators...)
-		}
-	}
-	return prodResult, catResult, nil
+	return labels, nil
 }
 
 // ListValidators returns a formatted string listing available validator
@@ -344,23 +364,91 @@ func ValidateVersionNames(p Product) []string {
 	return reasons
 }
 
-// ValidatePlatformAlignedPhases checks platform-aligned versions for required phases
-// with parseable dates.
-// REQ-TIER-PA-01
-func ValidatePlatformAlignedPhases(p Product) []string {
-	var reasons []string
-	for _, v := range p.Versions {
-		if isPreTierModel(v) || versionTier(v) != TierAligned {
-			continue
+func initPlatformAlignedPhases(d *ValidatorDeps) []Validator {
+	var ocp *Product
+	if d != nil {
+		ocp = d.OCPProduct
+	}
+	return []Validator{ValidatePlatformAlignedPhases(ocp)}
+}
+
+// ValidatePlatformAlignedPhases returns a REQ-TIER-PA-01 validator that checks
+// platform-aligned versions for required phases with parseable dates. When
+// ocpProduct is non-nil, EUS phases are only required when the corresponding
+// OCP version itself has those phases with parseable dates. When ocpProduct is
+// nil, all five standard phases are required.
+func ValidatePlatformAlignedPhases(ocpProduct *Product) Validator {
+	return func(p Product) []string {
+		var reasons []string
+		for _, v := range p.Versions {
+			if isPreTierModel(v) || versionTier(v) != TierAligned {
+				continue
+			}
+			required := resolveRequiredPhases(ocpProduct, v)
+			for _, name := range required {
+				if !hasPhaseWithParseableDates(v, name) {
+					reasons = append(reasons, fmt.Sprintf("REQ-TIER-PA-01: version %q: platform-aligned missing required phase %q with parseable dates", v.Name, name))
+				}
+			}
 		}
-		required := []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
-		for _, name := range required {
-			if !hasPhaseWithParseableDates(v, name) {
-				reasons = append(reasons, fmt.Sprintf("REQ-TIER-PA-01: version %q: platform-aligned missing required phase %q with parseable dates", v.Name, name))
+		return reasons
+	}
+}
+
+// resolveRequiredPhases determines which phases a platform-aligned version must
+// have based on the OCP platform's lifecycle data. Full support and Maintenance
+// are always required. EUS phases are required only when the corresponding OCP
+// version has them with parseable dates — currently even-numbered minor versions,
+// though this is read from PLCC rather than assumed.
+func resolveRequiredPhases(ocpProduct *Product, v Version) []string {
+	allRequired := []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
+	if ocpProduct == nil {
+		return allRequired
+	}
+
+	ocpVersionNames := parseOCPVersions(v.OpenShiftCompatibility)
+	if len(ocpVersionNames) == 0 {
+		return allRequired
+	}
+
+	required := []string{PhaseFullSupport, PhaseMaintenance}
+	for _, eus := range eusPhases {
+		for _, ocpVerName := range ocpVersionNames {
+			ocpVer := findVersionInProduct(ocpProduct, ocpVerName)
+			if ocpVer == nil {
+				return allRequired
+			}
+			if hasPhaseWithParseableDates(*ocpVer, eus) {
+				required = append(required, eus)
+				break
 			}
 		}
 	}
-	return reasons
+	return required
+}
+
+func parseOCPVersions(ocp string) []string {
+	ocp = strings.TrimSpace(ocp)
+	if ocp == "" || ocp == "N/A" {
+		return nil
+	}
+	var versions []string
+	for _, part := range strings.Split(ocp, ",") {
+		ver := strings.TrimSpace(part)
+		if ver != "" {
+			versions = append(versions, ver)
+		}
+	}
+	return versions
+}
+
+func findVersionInProduct(p *Product, name string) *Version {
+	for i := range p.Versions {
+		if p.Versions[i].Name == name {
+			return &p.Versions[i]
+		}
+	}
+	return nil
 }
 
 // ValidatePlatformAlignedOCP checks platform-aligned versions have OCP compatibility specified.
