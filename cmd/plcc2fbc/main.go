@@ -226,6 +226,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 	}
 
 	slog.Info("fetched products from PLCC", "count", catalog.Len())
+	ocpProduct := catalog.FindProductByName(plcc.OCPProductName)
 	if packages != "" {
 		var names []string
 		for _, name := range strings.Split(packages, ",") {
@@ -259,7 +260,8 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 			validatorNames = append(validatorNames, name)
 		}
 	}
-	validators, catalogValidators, err := plcc.LookupValidators(validatorNames...)
+	deps := &plcc.ValidatorDeps{OCPProduct: ocpProduct}
+	validators, catalogValidators, err := plcc.LookupValidators(deps, validatorNames...)
 	if err != nil {
 		return nil, fmt.Errorf("invalid --validators flag: %w", err)
 	}

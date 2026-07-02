@@ -87,7 +87,7 @@ Universal invariants that always apply regardless of version age: `ValidateDates
 |---|----------|-------|---------|
 | 1 | `ValidateReleaseCadence` | REQ-TIER-ALL-01 | Operators must have release cadence specified |
 | 2 | `ValidateTierSelected` | REQ-TIER-ALL-02 | Operator versions must have lifecycle tier selected |
-| 3 | `ValidatePlatformAlignedPhases` | REQ-TIER-PA-01 | Aligned: Full Support, Maintenance, EUS 1/2/3 with parseable dates |
+| 3 | `ValidatePlatformAlignedPhases` | REQ-TIER-PA-01 | Aligned: required phases with parseable dates (OCP cross-referenced) |
 | 4 | `ValidatePlatformAlignedOCP` | REQ-TIER-PA-02 | Aligned: OCP compatibility must be specified |
 | 5 | `ValidatePlatformAgnosticPhases` | REQ-TIER-AG-01 | Agnostic: Full Support and Maintenance with parseable dates |
 | 6 | `ValidatePlatformAgnosticEUSPhases` | REQ-TIER-AG-03 | EUS-aligned agnostic: all 3 EUS terms with parseable dates, or none |
@@ -102,6 +102,35 @@ Catalog validators are cross-product checks selectable via `--validators catalog
 | # | Function | Label | Purpose |
 |---|----------|-------|---------|
 | 1 | `ValidateNoDuplicates` | REQ-VAL-01 | No package name appears in multiple products |
+
+---
+
+### OCP Cross-Reference (REQ-TIER-PA-01)
+
+`ValidatePlatformAlignedPhases` checks that platform-aligned operator versions have the required lifecycle phases with parseable dates. Rather than hardcoding all five phases (Full Support, Maintenance, EUS Terms 1/2/3), the validator cross-references the OCP (OpenShift Container Platform) product from the PLCC catalog to determine which phases are actually required.
+
+**Why:** As of this writing, OCP only has EUS phases on even-numbered minor versions (4.14, 4.16, 4.18, ...). Odd-numbered versions (4.15, 4.17, ...) have EUS phase slots in PLCC with `"N/A"` dates. This pattern could change in future OCP releases. Rather than hardcoding even/odd logic, the validator reads the OCP product's actual PLCC data to determine which phases have real dates — so it will automatically adapt if the EUS policy changes. Without this cross-referencing, operators on odd OCP versions always fail because they lack EUS phases that OCP itself doesn't have.
+
+**Resolution logic (`resolveRequiredPhases`):**
+
+1. **Always required:** Full Support and Maintenance.
+2. **Conditionally required:** Each EUS phase (Terms 1, 2, 3) is required only if ANY OCP version referenced in the operator version's `openshift_compatibility` field has that phase with parseable (non-N/A, non-empty) start and end dates.
+3. **Fallback (conservative):** If OCP product data is unavailable, the OCP version is not found, or the operator has no `openshift_compatibility` value, all five phases are required. This prevents false negatives.
+
+**How OCP context is injected:**
+
+- `BuildValidators()` replaces the static `ValidatePlatformAlignedPhases` entry with an OCP-aware closure created by `NewPlatformAlignedPhasesValidator(ocpProduct)`.
+- The OCP product is extracted from the full PLCC catalog *before* package-name filtering (since OCP itself is not an operator package and would be filtered out).
+- `LookupValidators()` continues to use the static version (no OCP context), preserving backward compatibility for callers that don't need the cross-reference.
+
+**Example:**
+
+An operator version with `openshift_compatibility: "4.17"`:
+- OCP 4.17 has Full Support and Maintenance with dates, but EUS Terms 1/2/3 have `"N/A"` dates.
+- Only Full Support and Maintenance are required for this operator version.
+
+An operator version with `openshift_compatibility: "4.16, 4.18"`:
+- OCP 4.16 has all five phases with dates → all five phases required (union semantics: if ANY referenced OCP version has EUS, the operator must too).
 
 ---
 

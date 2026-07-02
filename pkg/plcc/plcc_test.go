@@ -26,6 +26,25 @@ import (
 	"time"
 )
 
+func TestFindProductByName(t *testing.T) {
+	catalog := &Catalog{Data: []Product{
+		{Name: "Product A", Package: "pkg-a"},
+		{Name: "Product B", Package: "pkg-b"},
+	}}
+
+	if p := catalog.FindProductByName("Product A"); p == nil || p.Package != "pkg-a" {
+		t.Errorf("expected pkg-a, got %v", p)
+	}
+	if p := catalog.FindProductByName("No Such Product"); p != nil {
+		t.Errorf("expected nil, got %v", p)
+	}
+
+	empty := &Catalog{}
+	if p := empty.FindProductByName("Product A"); p != nil {
+		t.Errorf("expected nil on empty catalog, got %v", p)
+	}
+}
+
 func TestParseTimestamp(t *testing.T) {
 	tests := []struct {
 		name    string
