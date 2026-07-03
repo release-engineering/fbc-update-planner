@@ -146,6 +146,7 @@ func (c *Catalog) FilterPackages() {
 
 // FilterByPackageNames keeps only products whose package name is in the provided list,
 // modifying the catalog in place. It returns a PackagesNotFoundError if any names were not found.
+// The catalog is modified in place also in case of error.
 func (c *Catalog) FilterByPackageNames(names []string) error {
 	allowed := make(map[string]bool, len(names))
 	for _, name := range names {
