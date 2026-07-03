@@ -137,7 +137,7 @@ func run() (err error) {
 
 	writer, err := fbc.NewPackageWriter(format)
 	if err != nil {
-		return fmt.Errorf("invalid output format %q (allowed: json, json-pretty, yaml): %w", format, err)
+		return fmt.Errorf("invalid output format: %w", err)
 	}
 
 	var count int
