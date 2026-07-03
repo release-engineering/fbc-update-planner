@@ -42,6 +42,11 @@ const (
 	TierRolling  = "Rolling"
 )
 
+// TierModelCutoffDate is the OCP 4.14 GA date (2023-10-31). The three-tier
+// lifecycle model (Aligned/Agnostic/Rolling) commenced with this release.
+// Versions whose earliest phase predates this are exempt from tier validation.
+var TierModelCutoffDate = time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC)
+
 var (
 	eusPhases       = []string{PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
 	majorMinorRegex = regexp.MustCompile(`^\d+\.\d+$`)
@@ -345,7 +350,7 @@ func ValidateVersionNames(p Product) []string {
 func ValidatePlatformAlignedPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierAligned {
+		if isPreTierModel(v) || versionTier(v) != TierAligned {
 			continue
 		}
 		required := []string{PhaseFullSupport, PhaseMaintenance, PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
@@ -363,7 +368,7 @@ func ValidatePlatformAlignedPhases(p Product) []string {
 func ValidatePlatformAlignedOCP(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierAligned {
+		if isPreTierModel(v) || versionTier(v) != TierAligned {
 			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -380,7 +385,7 @@ func ValidatePlatformAlignedOCP(p Product) []string {
 func ValidatePlatformAgnosticPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierAgnostic {
+		if isPreTierModel(v) || versionTier(v) != TierAgnostic {
 			continue
 		}
 		for _, name := range []string{PhaseFullSupport, PhaseMaintenance} {
@@ -399,7 +404,7 @@ func ValidatePlatformAgnosticPhases(p Product) []string {
 func ValidatePlatformAgnosticEUSPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierAgnostic || !isVersionEUSAligned(v) {
+		if isPreTierModel(v) || versionTier(v) != TierAgnostic || !isVersionEUSAligned(v) {
 			continue
 		}
 		for _, eus := range eusPhases {
@@ -417,7 +422,7 @@ func ValidatePlatformAgnosticEUSPhases(p Product) []string {
 func ValidatePlatformAgnosticEUSOCP(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierAgnostic || !isVersionEUSAligned(v) {
+		if isPreTierModel(v) || versionTier(v) != TierAgnostic || !isVersionEUSAligned(v) {
 			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -434,7 +439,7 @@ func ValidatePlatformAgnosticEUSOCP(p Product) []string {
 func ValidateRollingStreamPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierRolling {
+		if isPreTierModel(v) || versionTier(v) != TierRolling {
 			continue
 		}
 		if !hasPhaseWithParseableDates(v, PhaseFullSupport) {
@@ -450,7 +455,7 @@ func ValidateRollingStreamPhases(p Product) []string {
 func ValidateRollingStreamForbiddenPhases(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierRolling {
+		if isPreTierModel(v) || versionTier(v) != TierRolling {
 			continue
 		}
 		phaseNames := phaseNameSet(v)
@@ -489,6 +494,9 @@ func ValidateTierSelected(p Product) []string {
 	}
 	var reasons []string
 	for _, v := range p.Versions {
+		if isPreTierModel(v) {
+			continue
+		}
 		tier := versionTier(v)
 		if tier == "" || tier == "N/A" || tier == "-" {
 			reasons = append(reasons, fmt.Sprintf("REQ-TIER-ALL-02: version %q: lifecycle tier not selected (tier=%q)", v.Name, v.Tier))
@@ -503,7 +511,7 @@ func ValidateTierSelected(p Product) []string {
 func ValidateOCPFormat(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) != TierAligned {
+		if isPreTierModel(v) || versionTier(v) != TierAligned {
 			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
@@ -586,8 +594,8 @@ func ValidatePhaseEndAfterStart(p Product) []string {
 func ValidateOCPFormatAll(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if versionTier(v) == TierAligned {
-			continue // already checked by ValidateOCPFormat (REQ-FIELD-02)
+		if isPreTierModel(v) || versionTier(v) == TierAligned {
+			continue
 		}
 		ocp := strings.TrimSpace(v.OpenShiftCompatibility)
 		if ocp == "" || ocp == "N/A" {
@@ -601,6 +609,20 @@ func ValidateOCPFormatAll(p Product) []string {
 		}
 	}
 	return reasons
+}
+
+func isPreTierModel(v Version) bool {
+	var earliest time.Time
+	for _, ph := range v.Phases {
+		t, err := ParseTimestamp(ph.StartDate)
+		if err != nil {
+			continue
+		}
+		if earliest.IsZero() || t.Before(earliest) {
+			earliest = t
+		}
+	}
+	return earliest.IsZero() || earliest.Before(TierModelCutoffDate)
 }
 
 func versionTier(v Version) string {

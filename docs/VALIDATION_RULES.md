@@ -58,6 +58,14 @@ Before the FBC filter pipeline runs, `main.go` calls PLCC-level validators on ea
 
 Validators are split into three groups: `SyntaxValidators()` (data format/structure), `SemanticValidators()` (business/lifecycle rules), and `catalog` (cross-product checks). `DefaultValidators()` composes syntax + semantic; `DefaultCatalogValidators()` returns catalog-level checks. All three groups are included in `--validators all` (the default). Catalog-level checks run via `catalog.Validate()`.
 
+#### Pre-tier-model skip
+
+The three-tier lifecycle model (Platform Aligned / Platform Agnostic / Rolling Stream) was introduced with OCP 4.14, which GA'd on 2023-10-31 (`TierModelCutoffDate`). Versions whose earliest parseable phase start date predates this cutoff — or that have no phases with parseable dates — are considered **pre-tier-model** and are exempt from tier-specific validators. This prevents false positives on legacy versions that were published before the tier model existed.
+
+Tier-specific validators that apply the skip: `ValidateTierSelected` (REQ-TIER-ALL-02), `ValidatePlatformAlignedPhases` (REQ-TIER-PA-01), `ValidatePlatformAlignedOCP` (REQ-TIER-PA-02), `ValidatePlatformAgnosticPhases` (REQ-TIER-AG-01), `ValidatePlatformAgnosticEUSPhases` (REQ-TIER-AG-03), `ValidatePlatformAgnosticEUSOCP` (REQ-TIER-AG-04), `ValidateRollingStreamPhases` (REQ-TIER-RS-01), `ValidateRollingStreamForbiddenPhases` (REQ-TIER-RS-02), `ValidateOCPFormat` (REQ-FIELD-02), `ValidateOCPFormatAll` (CUSTOM-04).
+
+Universal invariants that always apply regardless of version age: `ValidateDatesStatic` (REQ-DATE-02), `ValidateDatesClean` (REQ-DATE-03), `ValidateDatesContiguity` (REQ-DATE-04), `ValidateVersionNames` (REQ-VER-01), `ValidatePhaseEndAfterStart` (CUSTOM-03), `ValidateReleaseCadence` (REQ-TIER-ALL-01), `ValidateIsOperator` (CUSTOM-01), `ValidateHasVersions` (CUSTOM-02).
+
 #### Syntax Validators
 
 | # | Function | Label | Purpose |
