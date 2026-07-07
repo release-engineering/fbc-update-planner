@@ -43,31 +43,31 @@ Universal invariants that always apply regardless of version age: `ValidateDates
 
 ### Syntax Validators
 
-| # | Function | Label | Purpose |
-|---|----------|-------|---------|
-| 1 | `ValidateIsOperator` | CUSTOM-01 | Product must have package name and be flagged as operator |
-| 2 | `ValidateHasVersions` | CUSTOM-02 | Product must have ≥1 version |
-| 3 | `ValidateDatesStatic` | REQ-DATE-02 | Dates must be static values (checks `_format` field) |
-| 4 | `ValidateDatesClean` | REQ-DATE-03 | Non-empty, non-N/A dates must cleanly parse |
-| 5 | `ValidateDatesContiguity` | REQ-DATE-04 | Consecutive phases must start 1 day after previous ends |
-| 6 | `ValidatePhaseEndAfterStart` | CUSTOM-03 | Phase end date must be after start date |
-| 7 | `ValidateVersionNames` | REQ-VER-01 | Version names must match `MAJOR.MINOR` |
-| 8 | `ValidateOCPFormat` | REQ-FIELD-02 | OCP compatibility on aligned versions must match `MAJOR.MINOR` |
-| 9 | `ValidateOCPFormatAll` | CUSTOM-04 | OCP compatibility format on non-aligned versions |
+| # | Function | Label | Skip | Purpose |
+|---|----------|-------|------|---------|
+| 1 | `ValidateIsOperator` | CUSTOM-01 | | Product must have package name and be flagged as operator |
+| 2 | `ValidateHasVersions` | CUSTOM-02 | | Product must have ≥1 version |
+| 3 | `ValidateDatesStatic` | REQ-DATE-02 | | Dates must be static values (checks `_format` field) |
+| 4 | `ValidateDatesClean` | REQ-DATE-03 | | Non-empty, non-N/A dates must cleanly parse |
+| 5 | `ValidateDatesContiguity` | REQ-DATE-04 | | Consecutive phases must start 1 day after previous ends |
+| 6 | `ValidatePhaseEndAfterStart` | CUSTOM-03 | | Phase end date must be after start date |
+| 7 | `ValidateVersionNames` | REQ-VER-01 | | Version names must match `MAJOR.MINOR` |
+| 8 | `ValidateOCPFormat` | REQ-FIELD-02 | pre-tier | OCP compatibility on aligned versions must match `MAJOR.MINOR` |
+| 9 | `ValidateOCPFormatAll` | CUSTOM-04 | pre-tier | OCP compatibility format on non-aligned versions |
 
 ### Semantic Validators
 
-| # | Function | Label | Purpose |
-|---|----------|-------|---------|
-| 1 | `ValidateReleaseCadence` | REQ-TIER-ALL-01 | Operators must have release cadence specified |
-| 2 | `ValidateTierSelected` | REQ-TIER-ALL-02 | Operator versions must have lifecycle tier selected |
-| 3 | `ValidatePlatformAlignedPhases` | REQ-TIER-PA-01 | Aligned: required phases with parseable dates (OCP cross-referenced) |
-| 4 | `ValidatePlatformAlignedOCP` | REQ-TIER-PA-02 | Aligned: OCP compatibility must be specified |
-| 5 | `ValidatePlatformAgnosticPhases` | REQ-TIER-AG-01 | Agnostic: Full Support and Maintenance with parseable dates |
-| 6 | `ValidatePlatformAgnosticEUSPhases` | REQ-TIER-AG-03 | EUS-aligned agnostic: all 3 EUS terms with parseable dates, or none |
-| 7 | `ValidatePlatformAgnosticEUSOCP` | REQ-TIER-AG-04 | EUS-aligned agnostic: OCP compatibility must be specified |
-| 8 | `ValidateRollingStreamPhases` | REQ-TIER-RS-01 | Rolling: Full Support with parseable dates |
-| 9 | `ValidateRollingStreamForbiddenPhases` | REQ-TIER-RS-02 | Rolling: must not include Maintenance or EUS phases |
+| # | Function | Label | Skip | Purpose |
+|---|----------|-------|------|---------|
+| 1 | `ValidateReleaseCadence` | REQ-TIER-ALL-01 | | Operators must have release cadence specified |
+| 2 | `ValidateTierSelected` | REQ-TIER-ALL-02 | pre-tier | Operator versions must have lifecycle tier selected |
+| 3 | `ValidatePlatformAlignedPhases` | REQ-TIER-PA-01 | pre-tier | Aligned: required phases with parseable dates (OCP cross-referenced) |
+| 4 | `ValidatePlatformAlignedOCP` | REQ-TIER-PA-02 | pre-tier | Aligned: OCP compatibility must be specified |
+| 5 | `ValidatePlatformAgnosticPhases` | REQ-TIER-AG-01 | pre-tier | Agnostic: Full Support and Maintenance with parseable dates |
+| 6 | `ValidatePlatformAgnosticEUSPhases` | REQ-TIER-AG-03 | pre-tier | EUS-aligned agnostic: all 3 EUS terms with parseable dates, or none |
+| 7 | `ValidatePlatformAgnosticEUSOCP` | REQ-TIER-AG-04 | pre-tier | EUS-aligned agnostic: OCP compatibility must be specified |
+| 8 | `ValidateRollingStreamPhases` | REQ-TIER-RS-01 | pre-tier | Rolling: Full Support with parseable dates |
+| 9 | `ValidateRollingStreamForbiddenPhases` | REQ-TIER-RS-02 | pre-tier | Rolling: must not include Maintenance or EUS phases |
 
 #### OCP Cross-Reference (REQ-TIER-PA-01)
 
@@ -99,9 +99,9 @@ An operator version with `openshift_compatibility: "4.16, 4.18"`:
 
 Catalog validators are cross-product checks selectable via `--validators catalog` or by label (e.g. `--validators REQ-VAL-01`). They are included in `--validators all` (the default). By default, all products with a duplicated package name are removed (all copies, since we cannot determine which is authoritative). With `--permissive`, duplicates produce warnings only.
 
-| # | Function | Label | Purpose |
-|---|----------|-------|---------|
-| 1 | `ValidateNoDuplicates` | REQ-VAL-01 | No package name appears in multiple products |
+| # | Function | Label | Skip | Purpose |
+|---|----------|-------|------|---------|
+| 1 | `ValidateNoDuplicates` | REQ-VAL-01 | | No package name appears in multiple products |
 
 ---
 
@@ -164,7 +164,7 @@ Filters live in `pkg/fbc/filter.go` and handle output cleanup (mutations) and FB
     * Mutate the package `p` as needed (e.g., drop or rewrite data).
     * Return `nil` to accept or a list of reason strings to reject.
 
-2. **Add an entry to `filterRegistry`** with a label (e.g. `FBC-MUTATE-02` for mutations, `FBC-VAL-07` for invariants) and group. Embed the label in all reason strings.
+2. **Add an entry to `filterRegistry`** with a label (e.g. `FBC-MUTATE-02` for mutations, `FBC-VAL-06` for invariants) and group. Embed the label in all reason strings.
 
 3. **Add a test** in `pkg/fbc/filter_test.go`.
 
