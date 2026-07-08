@@ -252,6 +252,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 	} else {
 		catalog.FilterPackages()
 	}
+	catalog.FilterMilestonePhases()
 	slog.Info("filtered packages", "count", catalog.Len())
 	catalog.SortByPackage()
 

@@ -128,9 +128,6 @@ func translatePhase(ph plcc.Phase) (Phase, error) {
 }
 
 func translateTimestamp(s string) (Date, error) {
-	if s == "" || s == "N/A" {
-		return Date{}, nil
-	}
 	t, err := plcc.ParseTimestamp(s)
 	if err != nil {
 		return Date{}, fmt.Errorf("invalid timestamp %q: %w", s, err)

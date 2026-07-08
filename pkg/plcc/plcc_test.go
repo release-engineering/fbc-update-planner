@@ -192,6 +192,31 @@ func TestFilterByPackageNamesPartialMatch(t *testing.T) {
 	}
 }
 
+func TestFilterMilestonePhases(t *testing.T) {
+	c := &Catalog{Data: []Product{{
+		Package: "test",
+		Versions: []Version{{
+			Name: "1.0",
+			Phases: []Phase{
+				{Name: "GA", StartDate: "N/A", EndDate: "2025-01-01T00:00:00.000Z"},
+				{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+				{Name: "EOL", StartDate: "2025-06-30T00:00:00.000Z", EndDate: ""},
+				{Name: "Both unset", StartDate: "N/A", EndDate: ""},
+			},
+		}},
+	}}}
+
+	c.FilterMilestonePhases()
+
+	phases := c.Data[0].Versions[0].Phases
+	if len(phases) != 1 {
+		t.Fatalf("expected 1 phase, got %d: %v", len(phases), phases)
+	}
+	if phases[0].Name != "Full support" {
+		t.Errorf("expected 'Full support', got %q", phases[0].Name)
+	}
+}
+
 func TestSortByPackage(t *testing.T) {
 	c := &Catalog{Data: []Product{
 		{Package: "zebra"},

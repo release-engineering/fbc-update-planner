@@ -29,9 +29,6 @@ type filterEntry struct {
 }
 
 var filterRegistry = []filterEntry{
-	// Mutation filters run first, followed by invariant validators.
-	{"FBC-MUTATIONS", "mutations", []Filter{FilterIncompletePhases}},
-	// Invariants required by FBC consumers. These must not be relaxed.
 	{"FBC-INVARIANTS", "invariants", []Filter{
 		ValidatePackageHasVersions,
 		ValidateVersionsHavePhases,
@@ -60,20 +57,6 @@ func (p *Package) Filter(filters ...Filter) []string {
 	return nil
 }
 
-// FilterIncompletePhases removes phases where either date is zero from all versions.
-func FilterIncompletePhases(p *Package) []string {
-	for i := range p.Versions {
-		filtered := p.Versions[i].Phases[:0]
-		for _, ph := range p.Versions[i].Phases {
-			if !ph.StartDate.IsZero() && !ph.EndDate.IsZero() {
-				filtered = append(filtered, ph)
-			}
-		}
-		p.Versions[i].Phases = filtered
-	}
-	return nil
-}
-
 // ValidatePackageHasVersions rejects a package that has no versions.
 func ValidatePackageHasVersions(p *Package) []string {
 	if len(p.Versions) == 0 {
@@ -93,16 +76,16 @@ func ValidateVersionsHavePhases(p *Package) []string {
 	return reasons
 }
 
-// ValidatePhaseDates rejects a package if any phase has a nil start or end date.
+// ValidatePhaseDates rejects a package if any phase has a zero start or end date.
 func ValidatePhaseDates(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		for _, ph := range v.Phases {
-			if ph.StartDate == nil {
-				reasons = append(reasons, fmt.Sprintf("version %s phase %q has nil start date", v.Name, ph.Name))
+			if ph.StartDate.IsZero() {
+				reasons = append(reasons, fmt.Sprintf("version %s phase %q has zero start date", v.Name, ph.Name))
 			}
-			if ph.EndDate == nil {
-				reasons = append(reasons, fmt.Sprintf("version %s phase %q has nil end date", v.Name, ph.Name))
+			if ph.EndDate.IsZero() {
+				reasons = append(reasons, fmt.Sprintf("version %s phase %q has zero end date", v.Name, ph.Name))
 			}
 		}
 	}
@@ -114,7 +97,7 @@ func ValidateDateOrdering(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		for _, ph := range v.Phases {
-			if ph.StartDate.Compare(*ph.EndDate) > 0 {
+			if ph.StartDate.Compare(ph.EndDate) > 0 {
 				reasons = append(reasons, fmt.Sprintf(
 					"version %s phase %q start date %s is after end date %s",
 					v.Name, ph.Name, ph.StartDate, ph.EndDate,
@@ -134,7 +117,7 @@ func ValidatePhaseContiguity(p *Package) []string {
 		for i := 0; i+1 < len(v.Phases); i++ {
 			cur := v.Phases[i]
 			next := v.Phases[i+1]
-			if cur.EndDate.NextDay().Compare(*next.StartDate) != 0 {
+			if cur.EndDate.NextDay().Compare(next.StartDate) != 0 {
 				reasons = append(reasons, fmt.Sprintf(
 					"version %s: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",
 					v.Name, cur.Name, cur.EndDate, next.Name, next.StartDate,

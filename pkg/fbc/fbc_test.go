@@ -82,17 +82,9 @@ func TestNewPackageNATimestamp(t *testing.T) {
 		}},
 	}
 
-	pkg, err := newPackage(product)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	ph := pkg.Versions[0].Phases[0]
-	if !ph.StartDate.IsZero() {
-		t.Errorf("expected zero StartDate for N/A, got %v", ph.StartDate)
-	}
-	wantEnd := mustParseDate(t, "2025-01-01")
-	if ph.EndDate.String() != wantEnd.String() {
-		t.Errorf("EndDate = %v, want %v", ph.EndDate, wantEnd)
+	_, err := newPackage(product)
+	if err == nil {
+		t.Fatal("expected error for N/A timestamp, got nil")
 	}
 }
 
@@ -124,17 +116,9 @@ func TestNewPackageEmptyTimestamp(t *testing.T) {
 		}},
 	}
 
-	pkg, err := newPackage(product)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	ph := pkg.Versions[0].Phases[0]
-	if !ph.StartDate.IsZero() {
-		t.Errorf("expected zero StartDate for empty string, got %v", ph.StartDate)
-	}
-	wantEnd := mustParseDate(t, "2025-01-01")
-	if ph.EndDate.String() != wantEnd.String() {
-		t.Errorf("EndDate = %v, want %v", ph.EndDate, wantEnd)
+	_, err := newPackage(product)
+	if err == nil {
+		t.Fatal("expected error for empty timestamp, got nil")
 	}
 }
 

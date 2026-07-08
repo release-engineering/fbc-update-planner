@@ -128,15 +128,6 @@ func (d Date) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
-func (d Date) Equal(other Date) bool {
-	return d.t.Equal(other.t)
-}
-
-// Compare returns a negative value if d < other, zero if equal, positive if d > other.
-func (d Date) Compare(other Date) int {
-	return d.t.Compare(other.t)
-}
-
 func (d Date) NextDay() Date {
 	return Date{t: d.t.AddDate(0, 0, 1)}
 }

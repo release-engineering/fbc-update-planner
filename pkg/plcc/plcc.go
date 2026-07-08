@@ -188,6 +188,29 @@ func (c *Catalog) FindProductByName(name string) *Product {
 	return nil
 }
 
+// FilterMilestonePhases removes phases that cannot be represented as date
+// ranges in FBC. This includes point-in-time milestones (exactly one date
+// is "N/A" or "") and phases with no dates at all (both are "N/A" or "").
+func (c *Catalog) FilterMilestonePhases() {
+	for i := range c.Data {
+		for j := range c.Data[i].Versions {
+			phases := c.Data[i].Versions[j].Phases
+			filtered := phases[:0]
+			for _, ph := range phases {
+				if isUnsetDate(ph.StartDate) || isUnsetDate(ph.EndDate) {
+					continue
+				}
+				filtered = append(filtered, ph)
+			}
+			c.Data[i].Versions[j].Phases = filtered
+		}
+	}
+}
+
+func isUnsetDate(s string) bool {
+	return s == "" || s == "N/A"
+}
+
 // Len returns the number of products currently in the catalog.
 func (c *Catalog) Len() int {
 	return len(c.Data)

@@ -53,29 +53,6 @@ func TestFilter(t *testing.T) {
 	}
 }
 
-func TestFilterIncompletePhases(t *testing.T) {
-	pkg := &Package{Versions: []Version{{
-		Name: mustParseMajorMinor(t, "1.0"),
-		Phases: []Phase{
-			{Name: "GA", EndDate: mustParseDate(t, "2025-01-01")},
-			{Name: "Full support", StartDate: mustParseDate(t, "2025-01-01"), EndDate: mustParseDate(t, "2025-12-31")},
-			{Name: "EOL", StartDate: mustParseDate(t, "2025-12-31")},
-		},
-	}}}
-
-	reasons := FilterIncompletePhases(pkg)
-
-	if len(reasons) != 0 {
-		t.Errorf("expected no reasons, got %v", reasons)
-	}
-	if len(pkg.Versions[0].Phases) != 1 {
-		t.Fatalf("expected 1 phase kept, got %d", len(pkg.Versions[0].Phases))
-	}
-	if pkg.Versions[0].Phases[0].Name != "Full support" {
-		t.Errorf("expected 'Full support' kept, got %q", pkg.Versions[0].Phases[0].Name)
-	}
-}
-
 func TestValidatePackageHasVersions(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -91,7 +68,7 @@ func TestValidatePackageHasVersions(t *testing.T) {
 			name: "has versions",
 			pkg: &Package{Name: "test", Versions: []Version{{
 				Name:   mustParseMajorMinor(t, "1.0"),
-				Phases: []Phase{{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")}},
+				Phases: []Phase{{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-12-31")}},
 			}}},
 			wantReject: false,
 		},
@@ -126,14 +103,14 @@ func TestValidateVersionsHavePhases(t *testing.T) {
 			name: "all versions have phases",
 			pkg: &Package{Versions: []Version{{
 				Name:   mustParseMajorMinor(t, "1.0"),
-				Phases: []Phase{{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")}},
+				Phases: []Phase{{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-12-31")}},
 			}}},
 			wantReject: false,
 		},
 		{
 			name: "one version missing phases",
 			pkg: &Package{Versions: []Version{
-				{Name: mustParseMajorMinor(t, "1.0"), Phases: []Phase{{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")}}},
+				{Name: mustParseMajorMinor(t, "1.0"), Phases: []Phase{{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-12-31")}}},
 				{Name: mustParseMajorMinor(t, "2.0")},
 			}},
 			wantReject: true,
@@ -164,39 +141,39 @@ func TestValidatePhaseDates(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-06-30")},
 				},
 			}}},
 			wantReject: false,
 		},
 		{
-			name: "nil start date",
+			name: "zero start date",
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: nil, EndDate: datePtr(t, "2025-06-30")},
+					{Name: "GA", EndDate: mustParseDate(t, "2025-06-30")},
 				},
 			}}},
 			wantReject: true,
 			wantCount:  1,
 		},
 		{
-			name: "nil end date",
+			name: "zero end date",
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: nil},
+					{Name: "GA", StartDate: mustParseDate(t, "2025-01-01")},
 				},
 			}}},
 			wantReject: true,
 			wantCount:  1,
 		},
 		{
-			name: "both dates nil",
+			name: "both dates zero",
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: nil, EndDate: nil},
+					{Name: "GA"},
 				},
 			}}},
 			wantReject: true,
@@ -230,7 +207,7 @@ func TestValidateDateOrdering(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-06-30")},
 				},
 			}}},
 			wantReject: false,
@@ -240,7 +217,7 @@ func TestValidateDateOrdering(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-01-01")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-01-01")},
 				},
 			}}},
 			wantReject: false,
@@ -250,7 +227,7 @@ func TestValidateDateOrdering(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-06-30"), EndDate: datePtr(t, "2025-01-01")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-06-30"), EndDate: mustParseDate(t,"2025-01-01")},
 				},
 			}}},
 			wantReject: true,
@@ -260,8 +237,8 @@ func TestValidateDateOrdering(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
-					{Name: "Maintenance", StartDate: datePtr(t, "2025-12-31"), EndDate: datePtr(t, "2025-07-01")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-06-30")},
+					{Name: "Maintenance", StartDate: mustParseDate(t,"2025-12-31"), EndDate: mustParseDate(t,"2025-07-01")},
 				},
 			}}},
 			wantReject: true,
@@ -291,9 +268,9 @@ func TestValidatePhaseContiguity(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
-					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
-					{Name: "EOL", StartDate: datePtr(t, "2026-01-01"), EndDate: datePtr(t, "2026-06-30")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-06-30")},
+					{Name: "Maintenance", StartDate: mustParseDate(t,"2025-07-01"), EndDate: mustParseDate(t,"2025-12-31")},
+					{Name: "EOL", StartDate: mustParseDate(t,"2026-01-01"), EndDate: mustParseDate(t,"2026-06-30")},
 				},
 			}}},
 			wantReject: false,
@@ -303,8 +280,8 @@ func TestValidatePhaseContiguity(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
-					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-02"), EndDate: datePtr(t, "2025-12-31")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-06-30")},
+					{Name: "Maintenance", StartDate: mustParseDate(t,"2025-07-02"), EndDate: mustParseDate(t,"2025-12-31")},
 				},
 			}}},
 			wantReject: true,
@@ -314,8 +291,8 @@ func TestValidatePhaseContiguity(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-07-01")},
-					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-07-01")},
+					{Name: "Maintenance", StartDate: mustParseDate(t,"2025-07-01"), EndDate: mustParseDate(t,"2025-12-31")},
 				},
 			}}},
 			wantReject: true,
@@ -325,7 +302,7 @@ func TestValidatePhaseContiguity(t *testing.T) {
 			pkg: &Package{Versions: []Version{{
 				Name: mustParseMajorMinor(t, "1.0"),
 				Phases: []Phase{
-					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")},
+					{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-12-31")},
 				},
 			}}},
 			wantReject: false,
@@ -336,15 +313,15 @@ func TestValidatePhaseContiguity(t *testing.T) {
 				{
 					Name: mustParseMajorMinor(t, "1.0"),
 					Phases: []Phase{
-						{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
-						{Name: "EOL", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+						{Name: "GA", StartDate: mustParseDate(t,"2025-01-01"), EndDate: mustParseDate(t,"2025-06-30")},
+						{Name: "EOL", StartDate: mustParseDate(t,"2025-07-01"), EndDate: mustParseDate(t,"2025-12-31")},
 					},
 				},
 				{
 					Name: mustParseMajorMinor(t, "2.0"),
 					Phases: []Phase{
-						{Name: "GA", StartDate: datePtr(t, "2025-06-01"), EndDate: datePtr(t, "2025-11-30")},
-						{Name: "EOL", StartDate: datePtr(t, "2025-12-01"), EndDate: datePtr(t, "2026-05-31")},
+						{Name: "GA", StartDate: mustParseDate(t,"2025-06-01"), EndDate: mustParseDate(t,"2025-11-30")},
+						{Name: "EOL", StartDate: mustParseDate(t,"2025-12-01"), EndDate: mustParseDate(t,"2026-05-31")},
 					},
 				},
 			}},
