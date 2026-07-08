@@ -115,6 +115,15 @@ func (d Date) String() string {
 	return d.t.Format(dateLayout)
 }
 
+func (d Date) IsZero() bool {
+	return d.t.IsZero()
+}
+
+// Compare returns a negative value if d < other, zero if equal, positive if d > other.
+func (d Date) Compare(other Date) int {
+	return d.t.Compare(other.t)
+}
+
 func (d Date) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }

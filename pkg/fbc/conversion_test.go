@@ -121,7 +121,7 @@ func TestConvertPhases(t *testing.T) {
 			if len(dst.Phases) != tt.wantCount {
 				t.Fatalf("got %d phases, want %d", len(dst.Phases), tt.wantCount)
 			}
-			if tt.wantNilDat && dst.Phases[0].StartDate != nil {
+			if tt.wantNilDat && !dst.Phases[0].StartDate.IsZero() {
 				t.Errorf("expected nil StartDate, got %v", dst.Phases[0].StartDate)
 			}
 		})
@@ -197,4 +197,3 @@ func TestDefaultConverters(t *testing.T) {
 		t.Errorf("got %d converters, want 3", len(converters))
 	}
 }
-

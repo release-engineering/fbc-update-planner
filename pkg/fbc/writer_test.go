@@ -66,8 +66,8 @@ func samplePackage(t *testing.T, name string) *Package {
 			Name: mustParseMajorMinor(t, "1.0"),
 			Phases: []Phase{{
 				Name:      "Full support",
-				StartDate: datePtr(t, "2025-01-01"),
-				EndDate:   datePtr(t, "2025-06-30"),
+				StartDate: mustParseDate(t, "2025-01-01"),
+				EndDate:   mustParseDate(t, "2025-06-30"),
 			}},
 		}},
 	}

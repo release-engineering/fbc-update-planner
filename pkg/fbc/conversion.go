@@ -127,15 +127,13 @@ func translatePhase(ph plcc.Phase) (Phase, error) {
 	return Phase{Name: ph.Name, StartDate: start, EndDate: end}, nil
 }
 
-func translateTimestamp(s string) (*Date, error) {
+func translateTimestamp(s string) (Date, error) {
 	if s == "" || s == "N/A" {
-		return nil, nil
+		return Date{}, nil
 	}
 	t, err := plcc.ParseTimestamp(s)
 	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp %q: %w", s, err)
+		return Date{}, fmt.Errorf("invalid timestamp %q: %w", s, err)
 	}
-	d := NewDate(t.Year(), t.Month(), t.Day())
-	return &d, nil
+	return NewDate(t.Year(), t.Month(), t.Day()), nil
 }
-

@@ -57,9 +57,9 @@ func TestFilterIncompletePhases(t *testing.T) {
 	pkg := &Package{Versions: []Version{{
 		Name: mustParseMajorMinor(t, "1.0"),
 		Phases: []Phase{
-			{Name: "GA", StartDate: nil, EndDate: datePtr(t, "2025-01-01")},
-			{Name: "Full support", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")},
-			{Name: "EOL", StartDate: datePtr(t, "2025-12-31"), EndDate: nil},
+			{Name: "GA", EndDate: mustParseDate(t, "2025-01-01")},
+			{Name: "Full support", StartDate: mustParseDate(t, "2025-01-01"), EndDate: mustParseDate(t, "2025-12-31")},
+			{Name: "EOL", StartDate: mustParseDate(t, "2025-12-31")},
 		},
 	}}}
 

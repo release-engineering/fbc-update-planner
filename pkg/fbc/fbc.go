@@ -46,8 +46,8 @@ type Version struct {
 // Phase represents a lifecycle phase with start and end dates.
 type Phase struct {
 	Name      string `json:"name"`
-	StartDate *Date  `json:"startDate,omitempty"`
-	EndDate   *Date  `json:"endDate,omitempty"`
+	StartDate Date   `json:"startDate"`
+	EndDate   Date   `json:"endDate"`
 }
 
 // Platform represents platform compatibility information.
