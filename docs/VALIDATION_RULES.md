@@ -121,7 +121,6 @@ Catalog validators are cross-product checks selectable via `--validators catalog
 
 - `LookupValidators(deps, ...)` calls `initPlatformAlignedPhases(deps)` for the REQ-TIER-PA-01 entry, which creates an OCP-aware closure via `ValidatePlatformAlignedPhases(ocpProduct)`.
 - The OCP product is extracted from the full PLCC catalog *before* package-name filtering (since OCP itself is not an operator package and would be filtered out).
-- `LookupValidators()` continues to use the static version (no OCP context), preserving backward compatibility for callers that don't need the cross-reference.
 
 **Example:**
 
