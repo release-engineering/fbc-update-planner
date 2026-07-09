@@ -46,6 +46,22 @@ func datePtr(t *testing.T, s string) *Date {
 	return &d
 }
 
+func TestMajorMinorRegexpGroups(t *testing.T) {
+	inputs := []string{
+		"0.0", "0.1", "1.0", "1.2", "4.12", "10.20",
+		"", "1", "1.2.3", "a.b", "1.x", "-1.2",
+		"01.2", "1.02", ".1", "1.", "1.2 ", " 1.2", "v1.2",
+		"999999999.999999999", "1.2\n", "\t1.2", "1\x002",
+		"١.٢", "1.2.3.4", "1..2", ".", "..", "1.2a",
+	}
+	for _, s := range inputs {
+		matches := majorMinorRegexp.FindStringSubmatch(s)
+		if matches != nil && len(matches) != 3 {
+			t.Errorf("FindStringSubmatch(%q) returned %d elements, want nil or 3", s, len(matches))
+		}
+	}
+}
+
 func TestParseMajorMinor(t *testing.T) {
 	valid := []struct {
 		input string

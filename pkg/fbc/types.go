@@ -35,12 +35,11 @@ type MajorMinor struct {
 // ParseMajorMinor parses a "MAJOR.MINOR" string into a MajorMinor value.
 // Leading zeros are rejected (e.g., "01.2" is invalid).
 func ParseMajorMinor(s string) (*MajorMinor, error) {
+	// matches is always nil (no match) or [fullMatch, major, minor] — the
+	// regex has exactly 2 capture groups. TestMajorMinorRegexpGroups verifies this.
 	matches := majorMinorRegexp.FindStringSubmatch(s)
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("invalid version %q; expected <major>.<minor>", s)
-	}
-	if len(matches) != 3 {
-		panic("programmer error: expected 2 submatches")
 	}
 	major, err := strconv.ParseUint(matches[1], 10, 64)
 	if err != nil {
