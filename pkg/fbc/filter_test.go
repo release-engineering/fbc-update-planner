@@ -20,6 +20,13 @@ import (
 	"testing"
 )
 
+func TestDefaultFiltersFromRegistry(t *testing.T) {
+	filters := DefaultFilters()
+	if len(filters) != 1 {
+		t.Errorf("got %d filters, want 1", len(filters))
+	}
+}
+
 func TestFilter(t *testing.T) {
 	var callOrder []string
 	f1 := func(p *Package) []string {

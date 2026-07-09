@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strings"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
@@ -142,84 +141,15 @@ func newPackage(product plcc.Product) (*Package, error) {
 }
 
 func translateVersion(v plcc.Version) (*Version, error) {
+	dst := &Version{}
 	var errs []error
-
-	name, err := ParseMajorMinor(v.Name)
-	if err != nil {
-		errs = append(errs, err)
+	for _, conv := range DefaultConverters() {
+		errs = append(errs, conv(v, dst)...)
 	}
-
-	var phases []Phase
-	for _, ph := range v.Phases {
-		fp, err := translatePhase(ph)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("phase %q: %w", ph.Name, err))
-		} else {
-			phases = append(phases, fp)
-		}
-	}
-
-	var platforms []Platform
-	if v.OpenShiftCompatibility != "" && v.OpenShiftCompatibility != "N/A" {
-		var ocpVersions []MajorMinor
-		for _, p := range strings.Split(v.OpenShiftCompatibility, ",") {
-			trimmed := strings.TrimSpace(p)
-			if trimmed == "" {
-				continue
-			}
-			mm, err := ParseMajorMinor(trimmed)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("OCP compatibility: %w", err))
-			} else {
-				ocpVersions = append(ocpVersions, mm)
-			}
-		}
-		if len(ocpVersions) > 0 {
-			platforms = []Platform{{Name: "openshift", Versions: ocpVersions}}
-		}
-	}
-
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
-
-	fv := &Version{
-		Name:                  name,
-		Phases:                phases,
-		PlatformCompatibility: platforms,
-	}
-	return fv, nil
-}
-
-func translatePhase(ph plcc.Phase) (Phase, error) {
-	var errs []error
-
-	start, err := translateTimestamp(ph.StartDate)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("start date: %w", err))
-	}
-
-	end, err := translateTimestamp(ph.EndDate)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("end date: %w", err))
-	}
-
-	if len(errs) > 0 {
-		return Phase{}, errors.Join(errs...)
-	}
-	return Phase{Name: ph.Name, StartDate: start, EndDate: end}, nil
-}
-
-func translateTimestamp(s string) (*Date, error) {
-	if s == "" || s == "N/A" {
-		return nil, nil
-	}
-	t, err := plcc.ParseTimestamp(s)
-	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp %q: %w", s, err)
-	}
-	d := NewDate(t.Year(), t.Month(), t.Day())
-	return &d, nil
+	return dst, nil
 }
 
 // unwrapJoined extracts individual errors from an errors.Join result.

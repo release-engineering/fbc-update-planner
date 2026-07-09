@@ -20,11 +20,23 @@ package fbc
 // A non-empty return means the package should be rejected.
 type Filter func(*Package) []string
 
+type filterEntry struct {
+	Label   string
+	Group   string // "filter"
+	Filters []Filter
+}
+
+var filterRegistry = []filterEntry{
+	{"FBC-FILTER-01", "filter", []Filter{FilterIncompletePhases}},
+}
+
 // DefaultFilters returns the standard processing pipeline for FBC output cleanup.
 func DefaultFilters() []Filter {
-	return []Filter{
-		FilterIncompletePhases,
+	var result []Filter
+	for _, entry := range filterRegistry {
+		result = append(result, entry.Filters...)
 	}
+	return result
 }
 
 // Filter runs filters in order, stopping at the first one that returns reasons.
