@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
@@ -97,6 +98,89 @@ func TestTranslate(t *testing.T) {
 	}
 	if len(valid[2].Versions[0].Phases) != 1 {
 		t.Errorf("empty-dates-pkg: got %d phases, want 1 (GA should be stripped)", len(valid[2].Versions[0].Phases))
+	}
+}
+
+func TestTranslateProduct(t *testing.T) {
+	tests := []struct {
+		name       string
+		product    plcc.Product
+		wantPkg    bool
+		wantReason string
+	}{
+		{
+			name: "valid product",
+			product: plcc.Product{
+				Package: "test-pkg",
+				Versions: []plcc.Version{{
+					Name: "1.0",
+					Phases: []plcc.Phase{
+						{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+					},
+				}},
+			},
+			wantPkg: true,
+		},
+		{
+			name: "invalid version name",
+			product: plcc.Product{
+				Package: "bad-pkg",
+				Versions: []plcc.Version{{
+					Name:   "not-semver",
+					Phases: []plcc.Phase{{Name: "GA", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"}},
+				}},
+			},
+			wantReason: "invalid version",
+		},
+		{
+			name: "N/A timestamps filtered",
+			product: plcc.Product{
+				Package: "na-pkg",
+				Versions: []plcc.Version{{
+					Name: "1.0",
+					Phases: []plcc.Phase{
+						{Name: "GA", StartDate: "N/A", EndDate: "2025-01-01T00:00:00.000Z"},
+						{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+					},
+				}},
+			},
+			wantPkg: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkg, failure := TranslateProduct(tt.product, DefaultFilters()...)
+			if tt.wantPkg {
+				if pkg == nil {
+					t.Fatal("expected package, got nil")
+				}
+				if failure != nil {
+					t.Fatalf("expected no failure, got %v", failure.Reasons)
+				}
+				return
+			}
+			if pkg != nil {
+				t.Fatalf("expected nil package, got %+v", pkg)
+			}
+			if failure == nil {
+				t.Fatal("expected failure, got nil")
+			}
+			if failure.PackageName != tt.product.Package {
+				t.Errorf("failure.PackageName = %q, want %q", failure.PackageName, tt.product.Package)
+			}
+			if tt.wantReason != "" {
+				found := false
+				for _, r := range failure.Reasons {
+					if strings.Contains(r, tt.wantReason) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected reason containing %q, got %v", tt.wantReason, failure.Reasons)
+				}
+			}
+		})
 	}
 }
 

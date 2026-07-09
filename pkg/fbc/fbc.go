@@ -76,6 +76,33 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 	return len(valid), nil
 }
 
+// TranslateProduct converts a single PLCC product to an FBC package, running
+// it through the provided filter pipeline. Returns the package on success, or
+// nil and a ValidationResult on failure.
+func TranslateProduct(product plcc.Product, filters ...Filter) (*Package, *report.ValidationResult) {
+	pkg, err := newPackage(product)
+	if err != nil {
+		var reasons []string
+		for _, e := range unwrapJoined(err) {
+			reasons = append(reasons, e.Error())
+		}
+		return nil, &report.ValidationResult{
+			PackageName: product.Package,
+			Valid:       false,
+			Reasons:     reasons,
+		}
+	}
+	reasons := pkg.Filter(filters...)
+	if len(reasons) > 0 {
+		return nil, &report.ValidationResult{
+			PackageName: product.Package,
+			Valid:       false,
+			Reasons:     reasons,
+		}
+	}
+	return pkg, nil
+}
+
 // Translate converts PLCC products to FBC packages, running each through the
 // provided filter pipeline. Filters may mutate packages (e.g., drop incomplete
 // phases) or reject them. Returns the valid packages and a list of rejections.
@@ -85,32 +112,13 @@ func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report
 	var failures []report.ValidationResult
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
-		pkg, err := newPackage(product)
-		if err != nil {
-			var reasons []string
-			for _, e := range unwrapJoined(err) {
-				reasons = append(reasons, e.Error())
-			}
-			failures = append(failures, report.ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     reasons,
-			})
+		pkg, failure := TranslateProduct(product, filters...)
+		if failure != nil {
+			failures = append(failures, *failure)
 			continue
 		}
-		reasons := pkg.Filter(filters...)
-		if len(reasons) > 0 {
-			failures = append(failures, report.ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     reasons,
-			})
-			continue
-		}
-
 		validPackages = append(validPackages, pkg)
 	}
-
 	return validPackages, failures
 }
 

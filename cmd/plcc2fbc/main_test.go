@@ -129,12 +129,12 @@ func TestRun(t *testing.T) {
 		{
 			name:    "split fails on untranslatable package",
 			args:    []string{"plcc2fbc", "-i", testdataInput, "--split", t.TempDir()},
-			wantErr: "produced 0 FBC blobs",
+			wantErr: "failed FBC translation",
 		},
 		{
 			name:    "split yaml fails on untranslatable package",
 			args:    []string{"plcc2fbc", "-i", testdataInput, "-o", "yaml", "--split", t.TempDir()},
-			wantErr: "produced 0 FBC blobs",
+			wantErr: "failed FBC translation",
 		},
 	}
 

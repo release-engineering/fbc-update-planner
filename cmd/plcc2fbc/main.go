@@ -164,6 +164,13 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 		if !fs.ValidPath(product.Package) {
 			return 0, fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
 		}
+		pkg, failure := fbc.TranslateProduct(product, fbc.DefaultFilters()...)
+		if failure != nil {
+			if err := report.LogResults(reportWriter, *failure); err != nil {
+				return 0, err
+			}
+			return 0, fmt.Errorf("package %s failed FBC translation", product.Package)
+		}
 		pkgDir := filepath.Join(dir, product.Package)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
 			return 0, fmt.Errorf("creating package directory %s: %w", pkgDir, err)
@@ -173,7 +180,7 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 		if err != nil {
 			return 0, fmt.Errorf("creating output file %s: %w", outPath, err)
 		}
-		count, werr := fbc.GenerateFBC([]plcc.Product{product}, f, reportWriter, writer)
+		werr := writer.Write(f, pkg)
 		cerr := f.Close()
 		if werr != nil {
 			_ = os.Remove(outPath)
@@ -181,11 +188,6 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 		}
 		if cerr != nil {
 			return 0, fmt.Errorf("closing %s: %w", outPath, cerr)
-		}
-		// Safeguard: a single product should always produce exactly one FBC blob.
-		if count != 1 {
-			_ = os.Remove(outPath)
-			return 0, fmt.Errorf("package %s produced %d FBC blobs, expected 1", product.Package, count)
 		}
 	}
 
