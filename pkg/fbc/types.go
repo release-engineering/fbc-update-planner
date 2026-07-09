@@ -34,22 +34,22 @@ type MajorMinor struct {
 
 // ParseMajorMinor parses a "MAJOR.MINOR" string into a MajorMinor value.
 // Leading zeros are rejected (e.g., "01.2" is invalid).
-func ParseMajorMinor(s string) (*MajorMinor, error) {
+func ParseMajorMinor(s string) (MajorMinor, error) {
 	// matches is always nil (no match) or [fullMatch, major, minor] — the
 	// regex has exactly 2 capture groups. TestMajorMinorRegexpGroups verifies this.
 	matches := majorMinorRegexp.FindStringSubmatch(s)
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("invalid version %q; expected <major>.<minor>", s)
+		return MajorMinor{}, fmt.Errorf("invalid version %q; expected <major>.<minor>", s)
 	}
 	major, err := strconv.ParseUint(matches[1], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid major version %q: %w", matches[1], err)
+		return MajorMinor{}, fmt.Errorf("invalid major version %q: %w", matches[1], err)
 	}
 	minor, err := strconv.ParseUint(matches[2], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid minor version %q: %w", matches[2], err)
+		return MajorMinor{}, fmt.Errorf("invalid minor version %q: %w", matches[2], err)
 	}
-	return &MajorMinor{Major: major, Minor: minor}, nil
+	return MajorMinor{Major: major, Minor: minor}, nil
 }
 
 func (m MajorMinor) String() string {
@@ -86,7 +86,7 @@ func (m *MajorMinor) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	*m = *parsed
+	*m = parsed
 	return nil
 }
 

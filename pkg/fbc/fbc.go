@@ -171,7 +171,7 @@ func translateVersion(v plcc.Version) (*Version, error) {
 			if err != nil {
 				errs = append(errs, fmt.Errorf("OCP compatibility: %w", err))
 			} else {
-				ocpVersions = append(ocpVersions, *mm)
+				ocpVersions = append(ocpVersions, mm)
 			}
 		}
 		if len(ocpVersions) > 0 {
@@ -184,7 +184,7 @@ func translateVersion(v plcc.Version) (*Version, error) {
 	}
 
 	fv := &Version{
-		Name:                  *name,
+		Name:                  name,
 		Phases:                phases,
 		PlatformCompatibility: platforms,
 	}

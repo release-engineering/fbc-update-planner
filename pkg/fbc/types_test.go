@@ -28,7 +28,7 @@ func mustParseMajorMinor(t *testing.T, s string) MajorMinor {
 	if err != nil {
 		t.Fatalf("ParseMajorMinor(%q): %v", s, err)
 	}
-	return *mm
+	return mm
 }
 
 func mustParseDate(t *testing.T, s string) Date {
