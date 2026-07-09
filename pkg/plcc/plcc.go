@@ -56,13 +56,18 @@ type Product struct {
 	IsOperator     bool      `json:"is_operator"`
 }
 
-// Packages returns the package names for this product. The package field
+// Packages returns the trimmed package names for this product. The package field
 // may contain a comma-separated list (e.g. "odf-operator,mcg-operator").
+// Empty segments are intentionally not filtered; they won't match anything downstream.
 func (p Product) Packages() []string {
 	if p.Package == "" {
 		return nil
 	}
-	return strings.Split(p.Package, ",")
+	parts := strings.Split(p.Package, ",")
+	for i, s := range parts {
+		parts[i] = strings.TrimSpace(s)
+	}
+	return parts
 }
 
 // Version represents a product version with its lifecycle phases and platform compatibility.
@@ -156,8 +161,11 @@ func (c *Catalog) FilterPackages() {
 	c.Data = filtered
 }
 
-// FilterByPackageNames keeps only products whose package name is in the provided list,
-// modifying the catalog in place. It returns a PackagesNotFoundError if any names were not found.
+// FilterByPackageNames keeps only products where at least one expanded package name
+// matches the provided list, modifying the catalog in place. It returns a
+// PackagesNotFoundError if any names were not found. A product with Package
+// "alpha-op,beta-op" is kept in full when either name matches, because the
+// underlying lifecycle data is shared across all names in the comma-separated list.
 // The catalog is modified in place also in case of error.
 func (c *Catalog) FilterByPackageNames(names []string) error {
 	allowed := make(map[string]bool, len(names))
@@ -169,7 +177,6 @@ func (c *Catalog) FilterByPackageNames(names []string) error {
 	for i := range c.Data {
 		matched := false
 		for _, pkg := range c.Data[i].Packages() {
-			pkg = strings.TrimSpace(pkg)
 			if allowed[pkg] {
 				found[pkg] = true
 				matched = true

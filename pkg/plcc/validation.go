@@ -276,7 +276,7 @@ func (c *Catalog) Validate(strict bool, validators ...CatalogValidator) CatalogR
 		for _, p := range c.Data {
 			rejected := false
 			for _, pkg := range p.Packages() {
-				if _, found := rejections[strings.TrimSpace(pkg)]; found {
+				if _, found := rejections[pkg]; found {
 					rejected = true
 					break
 				}
@@ -629,10 +629,7 @@ func ValidateNoDuplicates(products []Product) CatalogRejections {
 	pkgCount := make(map[string]int)
 	for _, p := range products {
 		for _, pkg := range p.Packages() {
-			pkg = strings.TrimSpace(pkg)
-			if pkg != "" {
-				pkgCount[pkg]++
-			}
+			pkgCount[pkg]++
 		}
 	}
 	rejections := make(CatalogRejections)
