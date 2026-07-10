@@ -82,20 +82,18 @@ func TestConvertPhases(t *testing.T) {
 			wantCount: 2,
 		},
 		{
-			name: "N/A timestamp becomes nil date",
+			name: "N/A timestamp becomes error",
 			version: plcc.Version{Phases: []plcc.Phase{
 				{Name: "GA", StartDate: "N/A", EndDate: "2025-01-01T00:00:00.000Z"},
 			}},
-			wantCount:  1,
-			wantNilDat: true,
+			wantErr: true,
 		},
 		{
-			name: "empty timestamp becomes nil date",
+			name: "empty timestamp becomes error",
 			version: plcc.Version{Phases: []plcc.Phase{
 				{Name: "GA", StartDate: "", EndDate: "2025-01-01T00:00:00.000Z"},
 			}},
-			wantCount:  1,
-			wantNilDat: true,
+			wantErr: true,
 		},
 		{
 			name: "unparseable timestamp",

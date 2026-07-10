@@ -22,8 +22,8 @@ import (
 
 func TestDefaultFiltersFromRegistry(t *testing.T) {
 	filters := DefaultFilters()
-	if len(filters) != 1 {
-		t.Errorf("got %d filters, want 1", len(filters))
+	if len(filters) != 5 {
+		t.Errorf("got %d filters, want 5", len(filters))
 	}
 }
 

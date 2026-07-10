@@ -97,7 +97,7 @@ func TestTranslateProduct(t *testing.T) {
 			wantReason: "invalid version",
 		},
 		{
-			name: "N/A timestamps filtered",
+			name: "N/A timestamps rejected",
 			product: plcc.Product{
 				Package: "na-pkg",
 				Versions: []plcc.Version{{
@@ -108,7 +108,7 @@ func TestTranslateProduct(t *testing.T) {
 					},
 				}},
 			},
-			wantPkg: true,
+			wantReason: "invalid timestamp",
 		},
 	}
 	for _, tt := range tests {
