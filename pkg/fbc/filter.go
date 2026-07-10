@@ -110,10 +110,14 @@ func ValidatePhaseDates(p *Package) []string {
 }
 
 // ValidateDateOrdering rejects a package if any phase has a start date after its end date.
+// Point-in-time phases (nil start or end date) are ignored.
 func ValidateDateOrdering(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		for _, ph := range v.Phases {
+			if ph.StartDate == nil || ph.EndDate == nil {
+				continue
+			}
 			if ph.StartDate.Compare(*ph.EndDate) > 0 {
 				reasons = append(reasons, fmt.Sprintf(
 					"version %s phase %q start date %s is after end date %s",
@@ -128,12 +132,16 @@ func ValidateDateOrdering(p *Package) []string {
 // ValidatePhaseContiguity rejects a package if phases within any version are
 // not contiguous. Phases are contiguous when the end date of each phase is
 // exactly the day before the start date of the next phase.
+// Point-in-time phases (nil start or end date) are ignored.
 func ValidatePhaseContiguity(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		for i := 0; i+1 < len(v.Phases); i++ {
 			cur := v.Phases[i]
 			next := v.Phases[i+1]
+			if cur.EndDate == nil || next.StartDate == nil {
+				continue
+			}
 			if cur.EndDate.NextDay().Compare(*next.StartDate) != 0 {
 				reasons = append(reasons, fmt.Sprintf(
 					"version %s: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",

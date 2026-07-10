@@ -266,6 +266,36 @@ func TestValidateDateOrdering(t *testing.T) {
 			}}},
 			wantReject: true,
 		},
+		{
+			name: "nil start date skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: nil, EndDate: datePtr(t, "2025-06-30")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "nil end date skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: nil},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "both dates nil skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: nil, EndDate: nil},
+				},
+			}}},
+			wantReject: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -348,6 +378,28 @@ func TestValidatePhaseContiguity(t *testing.T) {
 					},
 				},
 			}},
+			wantReject: false,
+		},
+		{
+			name: "nil end date on current phase skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: nil},
+					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "nil start date on next phase skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "Maintenance", StartDate: nil, EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
 			wantReject: false,
 		},
 	}
