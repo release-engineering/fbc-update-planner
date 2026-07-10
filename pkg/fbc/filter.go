@@ -16,6 +16,8 @@ limitations under the License.
 
 package fbc
 
+import "fmt"
+
 // Filter is a pipeline callback that can mutate a Package.
 // A non-empty return means the package should be rejected.
 type Filter func(*Package) []string
@@ -27,7 +29,16 @@ type filterEntry struct {
 }
 
 var filterRegistry = []filterEntry{
-	{"FBC-FILTER-01", "filter", []Filter{FilterIncompletePhases}},
+	// Mutation filters run first, followed by invariant validators.
+	{"FBC-MUTATIONS", "mutations", []Filter{FilterIncompletePhases}},
+	// Invariants required by FBC consumers. These must not be relaxed.
+	{"FBC-INVARIANTS", "invariants", []Filter{
+		ValidatePackageHasVersions,
+		ValidateVersionsHavePhases,
+		ValidatePhaseDates,
+		ValidateDateOrdering,
+		ValidatePhaseContiguity,
+	}},
 }
 
 // DefaultFilters returns the standard processing pipeline for FBC output cleanup.
@@ -61,4 +72,83 @@ func FilterIncompletePhases(p *Package) []string {
 		p.Versions[i].Phases = filtered
 	}
 	return nil
+}
+
+// ValidatePackageHasVersions rejects a package that has no versions.
+func ValidatePackageHasVersions(p *Package) []string {
+	if len(p.Versions) == 0 {
+		return []string{"package has no versions"}
+	}
+	return nil
+}
+
+// ValidateVersionsHavePhases rejects a package if any version has no phases.
+func ValidateVersionsHavePhases(p *Package) []string {
+	var reasons []string
+	for _, v := range p.Versions {
+		if len(v.Phases) == 0 {
+			reasons = append(reasons, fmt.Sprintf("version %s has no phases", v.Name))
+		}
+	}
+	return reasons
+}
+
+// ValidatePhaseDates rejects a package if any phase has a nil start or end date.
+func ValidatePhaseDates(p *Package) []string {
+	var reasons []string
+	for _, v := range p.Versions {
+		for _, ph := range v.Phases {
+			if ph.StartDate == nil {
+				reasons = append(reasons, fmt.Sprintf("version %s phase %q has nil start date", v.Name, ph.Name))
+			}
+			if ph.EndDate == nil {
+				reasons = append(reasons, fmt.Sprintf("version %s phase %q has nil end date", v.Name, ph.Name))
+			}
+		}
+	}
+	return reasons
+}
+
+// ValidateDateOrdering rejects a package if any phase has a start date after its end date.
+// Point-in-time phases (nil start or end date) are ignored.
+func ValidateDateOrdering(p *Package) []string {
+	var reasons []string
+	for _, v := range p.Versions {
+		for _, ph := range v.Phases {
+			if ph.StartDate == nil || ph.EndDate == nil {
+				continue
+			}
+			if ph.StartDate.Compare(*ph.EndDate) > 0 {
+				reasons = append(reasons, fmt.Sprintf(
+					"version %s phase %q start date %s is after end date %s",
+					v.Name, ph.Name, ph.StartDate, ph.EndDate,
+				))
+			}
+		}
+	}
+	return reasons
+}
+
+// ValidatePhaseContiguity rejects a package if phases within any version are
+// not contiguous. Phases are contiguous when the end date of each phase is
+// exactly the day before the start date of the next phase.
+// Point-in-time phases (nil start or end date) are ignored.
+func ValidatePhaseContiguity(p *Package) []string {
+	var reasons []string
+	for _, v := range p.Versions {
+		for i := 0; i+1 < len(v.Phases); i++ {
+			cur := v.Phases[i]
+			next := v.Phases[i+1]
+			if cur.EndDate == nil || next.StartDate == nil {
+				continue
+			}
+			if cur.EndDate.NextDay().Compare(*next.StartDate) != 0 {
+				reasons = append(reasons, fmt.Sprintf(
+					"version %s: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",
+					v.Name, cur.Name, cur.EndDate, next.Name, next.StartDate,
+				))
+			}
+		}
+	}
+	return reasons
 }

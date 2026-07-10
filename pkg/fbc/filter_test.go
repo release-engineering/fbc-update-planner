@@ -22,8 +22,8 @@ import (
 
 func TestDefaultFiltersFromRegistry(t *testing.T) {
 	filters := DefaultFilters()
-	if len(filters) != 1 {
-		t.Errorf("got %d filters, want 1", len(filters))
+	if len(filters) != 6 {
+		t.Errorf("got %d filters, want 6", len(filters))
 	}
 }
 
@@ -73,5 +73,345 @@ func TestFilterIncompletePhases(t *testing.T) {
 	}
 	if pkg.Versions[0].Phases[0].Name != "Full support" {
 		t.Errorf("expected 'Full support' kept, got %q", pkg.Versions[0].Phases[0].Name)
+	}
+}
+
+func TestValidatePackageHasVersions(t *testing.T) {
+	tests := []struct {
+		name       string
+		pkg        *Package
+		wantReject bool
+	}{
+		{
+			name:       "no versions",
+			pkg:        &Package{Name: "test"},
+			wantReject: true,
+		},
+		{
+			name: "has versions",
+			pkg: &Package{Name: "test", Versions: []Version{{
+				Name:   mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")}},
+			}}},
+			wantReject: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasons := ValidatePackageHasVersions(tt.pkg)
+			if tt.wantReject && len(reasons) == 0 {
+				t.Error("expected rejection, got none")
+			}
+			if !tt.wantReject && len(reasons) > 0 {
+				t.Errorf("expected no rejection, got %v", reasons)
+			}
+		})
+	}
+}
+
+func TestValidateVersionsHavePhases(t *testing.T) {
+	tests := []struct {
+		name       string
+		pkg        *Package
+		wantReject bool
+	}{
+		{
+			name: "version with no phases",
+			pkg: &Package{Versions: []Version{
+				{Name: mustParseMajorMinor(t, "1.0")},
+			}},
+			wantReject: true,
+		},
+		{
+			name: "all versions have phases",
+			pkg: &Package{Versions: []Version{{
+				Name:   mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")}},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "one version missing phases",
+			pkg: &Package{Versions: []Version{
+				{Name: mustParseMajorMinor(t, "1.0"), Phases: []Phase{{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")}}},
+				{Name: mustParseMajorMinor(t, "2.0")},
+			}},
+			wantReject: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasons := ValidateVersionsHavePhases(tt.pkg)
+			if tt.wantReject && len(reasons) == 0 {
+				t.Error("expected rejection, got none")
+			}
+			if !tt.wantReject && len(reasons) > 0 {
+				t.Errorf("expected no rejection, got %v", reasons)
+			}
+		})
+	}
+}
+
+func TestValidatePhaseDates(t *testing.T) {
+	tests := []struct {
+		name       string
+		pkg        *Package
+		wantReject bool
+		wantCount  int
+	}{
+		{
+			name: "all dates present",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "nil start date",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: nil, EndDate: datePtr(t, "2025-06-30")},
+				},
+			}}},
+			wantReject: true,
+			wantCount:  1,
+		},
+		{
+			name: "nil end date",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: nil},
+				},
+			}}},
+			wantReject: true,
+			wantCount:  1,
+		},
+		{
+			name: "both dates nil",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: nil, EndDate: nil},
+				},
+			}}},
+			wantReject: true,
+			wantCount:  2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasons := ValidatePhaseDates(tt.pkg)
+			if tt.wantReject && len(reasons) == 0 {
+				t.Error("expected rejection, got none")
+			}
+			if !tt.wantReject && len(reasons) > 0 {
+				t.Errorf("expected no rejection, got %v", reasons)
+			}
+			if tt.wantReject && len(reasons) != tt.wantCount {
+				t.Errorf("expected %d reasons, got %d: %v", tt.wantCount, len(reasons), reasons)
+			}
+		})
+	}
+}
+
+func TestValidateDateOrdering(t *testing.T) {
+	tests := []struct {
+		name       string
+		pkg        *Package
+		wantReject bool
+	}{
+		{
+			name: "start before end",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "start equals end",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-01-01")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "start after end",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-06-30"), EndDate: datePtr(t, "2025-01-01")},
+				},
+			}}},
+			wantReject: true,
+		},
+		{
+			name: "multiple phases one invalid",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "Maintenance", StartDate: datePtr(t, "2025-12-31"), EndDate: datePtr(t, "2025-07-01")},
+				},
+			}}},
+			wantReject: true,
+		},
+		{
+			name: "nil start date skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: nil, EndDate: datePtr(t, "2025-06-30")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "nil end date skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: nil},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "both dates nil skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: nil, EndDate: nil},
+				},
+			}}},
+			wantReject: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasons := ValidateDateOrdering(tt.pkg)
+			if tt.wantReject && len(reasons) == 0 {
+				t.Error("expected rejection, got none")
+			}
+			if !tt.wantReject && len(reasons) > 0 {
+				t.Errorf("expected no rejection, got %v", reasons)
+			}
+		})
+	}
+}
+
+func TestValidatePhaseContiguity(t *testing.T) {
+	tests := []struct {
+		name       string
+		pkg        *Package
+		wantReject bool
+	}{
+		{
+			name: "contiguous phases",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+					{Name: "EOL", StartDate: datePtr(t, "2026-01-01"), EndDate: datePtr(t, "2026-06-30")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "one day gap between phases",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-02"), EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
+			wantReject: true,
+		},
+		{
+			name: "one day overlap between phases",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-07-01")},
+					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
+			wantReject: true,
+		},
+		{
+			name: "single phase",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "multiple versions all contiguous",
+			pkg: &Package{Versions: []Version{
+				{
+					Name: mustParseMajorMinor(t, "1.0"),
+					Phases: []Phase{
+						{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+						{Name: "EOL", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+					},
+				},
+				{
+					Name: mustParseMajorMinor(t, "2.0"),
+					Phases: []Phase{
+						{Name: "GA", StartDate: datePtr(t, "2025-06-01"), EndDate: datePtr(t, "2025-11-30")},
+						{Name: "EOL", StartDate: datePtr(t, "2025-12-01"), EndDate: datePtr(t, "2026-05-31")},
+					},
+				},
+			}},
+			wantReject: false,
+		},
+		{
+			name: "nil end date on current phase skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: nil},
+					{Name: "Maintenance", StartDate: datePtr(t, "2025-07-01"), EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
+			wantReject: false,
+		},
+		{
+			name: "nil start date on next phase skipped",
+			pkg: &Package{Versions: []Version{{
+				Name: mustParseMajorMinor(t, "1.0"),
+				Phases: []Phase{
+					{Name: "GA", StartDate: datePtr(t, "2025-01-01"), EndDate: datePtr(t, "2025-06-30")},
+					{Name: "Maintenance", StartDate: nil, EndDate: datePtr(t, "2025-12-31")},
+				},
+			}}},
+			wantReject: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasons := ValidatePhaseContiguity(tt.pkg)
+			if tt.wantReject && len(reasons) == 0 {
+				t.Error("expected rejection, got none")
+			}
+			if !tt.wantReject && len(reasons) > 0 {
+				t.Errorf("expected no rejection, got %v", reasons)
+			}
+		})
 	}
 }
