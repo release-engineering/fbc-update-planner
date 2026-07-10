@@ -93,7 +93,7 @@ With --dump-plcc:
 
 2. **FBC converters** (`pkg/fbc/conversion.go`): type-checked field translation from `plcc.Version` to `fbc.Version`. Each converter validates one aspect and populates the corresponding output field. Organized in `converterRegistry` with labels (`FBC-VER-01` version name, `FBC-PHASE-01` phase timestamps, `FBC-OCP-01` OCP compatibility). Always run — cannot be disabled. If any converter returns errors, the entire package is rejected.
 
-3. **FBC filter pipeline** (`pkg/fbc/filter.go`): output cleanup on translated `*fbc.Package` values. Filters mutate packages to produce clean FBC blobs. Organized in `filterRegistry` with labels (`FBC-FILTER-01` incomplete phases). Currently only `FilterIncompletePhases` (drops phases with missing dates). No validation logic — that belongs in PLCC validators. See `docs/VALIDATION_RULES.md` for the full specification.
+3. **FBC filter pipeline** (`pkg/fbc/filter.go`): output cleanup and invariant validation on translated `*fbc.Package` values. Organized in `filterRegistry` with per-filter labels: `FBC-MUTATE-01` (drop incomplete phases), `FBC-VAL-01`–`FBC-VAL-05` (structural invariants: versions exist, phases exist, dates non-nil, date ordering, phase contiguity). Labels are embedded in reason strings. See `docs/VALIDATION_RULES.md` for the full specification.
 
 ### Key Types
 
@@ -125,13 +125,13 @@ Output blobs use schema `io.openshift.operators.lifecycles.v1alpha1`. See `docs/
 ### Adding an FBC converter
 
 1. Write `func ConvertMyField(src plcc.Version, dst *Version) []error` in `pkg/fbc/conversion.go`
-2. Add an entry to `converterRegistry` with a label (e.g. `FBC-FOO-01`) and group `"converter"`
+2. Add an entry to `converterRegistry` with a label (e.g. `FBC-FOO-01`) and group `"converter"`. Embed the label in all error messages.
 3. Add test in `pkg/fbc/conversion_test.go` — table-driven, cover valid + invalid inputs
 
 ### Adding an FBC output filter
 
 1. Write `func FilterMyCleanup(p *Package) []string` in `pkg/fbc/filter.go`
-2. Add an entry to `filterRegistry` with a label (e.g. `FBC-FILTER-02`) and group `"filter"` — mutation only, no validation
+2. Add an entry to `filterRegistry` with a label (e.g. `FBC-MUTATE-02` for mutations, `FBC-VAL-06` for invariants) and group (`"filter"` or `"invariant"`). Embed the label in all reason strings.
 3. Add test in `pkg/fbc/filter_test.go` — table-driven
 4. Read `docs/VALIDATION_RULES.md` first
 

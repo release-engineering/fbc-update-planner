@@ -17,7 +17,6 @@ limitations under the License.
 package fbc
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -54,7 +53,7 @@ func DefaultConverters() []Converter {
 func ConvertVersionName(src plcc.Version, dst *Version) []error {
 	name, err := ParseMajorMinor(src.Name)
 	if err != nil {
-		return []error{err}
+		return []error{fmt.Errorf("FBC-VER-01: %w", err)}
 	}
 	dst.Name = name
 	return nil
@@ -67,9 +66,11 @@ func ConvertVersionName(src plcc.Version, dst *Version) []error {
 func ConvertPhases(src plcc.Version, dst *Version) []error {
 	var errs []error
 	for _, ph := range src.Phases {
-		fp, err := translatePhase(ph)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("phase %q: %w", ph.Name, err))
+		fp, phaseErrs := translatePhase(ph)
+		if len(phaseErrs) > 0 {
+			for _, e := range phaseErrs {
+				errs = append(errs, fmt.Errorf("FBC-PHASE-01: phase %q: %w", ph.Name, e))
+			}
 		} else {
 			dst.Phases = append(dst.Phases, fp)
 		}
@@ -94,7 +95,7 @@ func ConvertOCPCompatibility(src plcc.Version, dst *Version) []error {
 		}
 		mm, err := ParseMajorMinor(trimmed)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("OCP compatibility: %w", err))
+			errs = append(errs, fmt.Errorf("FBC-OCP-01: OCP compatibility: %w", err))
 		} else {
 			ocpVersions = append(ocpVersions, mm)
 		}
@@ -108,7 +109,7 @@ func ConvertOCPCompatibility(src plcc.Version, dst *Version) []error {
 	return nil
 }
 
-func translatePhase(ph plcc.Phase) (Phase, error) {
+func translatePhase(ph plcc.Phase) (Phase, []error) {
 	var errs []error
 
 	start, err := translateTimestamp(ph.StartDate)
@@ -122,7 +123,7 @@ func translatePhase(ph plcc.Phase) (Phase, error) {
 	}
 
 	if len(errs) > 0 {
-		return Phase{}, errors.Join(errs...)
+		return Phase{}, errs
 	}
 	return Phase{Name: ph.Name, StartDate: start, EndDate: end}, nil
 }

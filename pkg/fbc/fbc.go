@@ -17,7 +17,6 @@ limitations under the License.
 package fbc
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -80,11 +79,11 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 // it through the provided filter pipeline. Returns the package on success, or
 // nil and a ValidationResult on failure.
 func TranslateProduct(product plcc.Product, filters ...Filter) (*Package, *report.ValidationResult) {
-	pkg, err := newPackage(product)
-	if err != nil {
-		var reasons []string
-		for _, e := range unwrapJoined(err) {
-			reasons = append(reasons, e.Error())
+	pkg, errs := newPackage(product)
+	if len(errs) > 0 {
+		reasons := make([]string, len(errs))
+		for i, e := range errs {
+			reasons[i] = e.Error()
 		}
 		return nil, &report.ValidationResult{
 			PackageName: product.Package,
@@ -122,7 +121,7 @@ func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report
 	return validPackages, failures
 }
 
-func newPackage(product plcc.Product) (*Package, error) {
+func newPackage(product plcc.Product) (*Package, []error) {
 	pkg := &Package{
 		Schema: Schema,
 		Name:   product.Package,
@@ -130,15 +129,17 @@ func newPackage(product plcc.Product) (*Package, error) {
 
 	var errs []error
 	for _, v := range product.Versions {
-		fv, err := translateVersion(v)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("version %q: %w", v.Name, err))
+		fv, verErrs := translateVersion(v)
+		if len(verErrs) > 0 {
+			for _, e := range verErrs {
+				errs = append(errs, fmt.Errorf("version %q: %w", v.Name, e))
+			}
 			continue
 		}
 		pkg.Versions = append(pkg.Versions, *fv)
 	}
 	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+		return nil, errs
 	}
 
 	slices.SortFunc(pkg.Versions, func(a, b Version) int {
@@ -148,22 +149,14 @@ func newPackage(product plcc.Product) (*Package, error) {
 	return pkg, nil
 }
 
-func translateVersion(v plcc.Version) (*Version, error) {
+func translateVersion(v plcc.Version) (*Version, []error) {
 	dst := &Version{}
 	var errs []error
 	for _, conv := range DefaultConverters() {
 		errs = append(errs, conv(v, dst)...)
 	}
 	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+		return nil, errs
 	}
 	return dst, nil
-}
-
-// unwrapJoined extracts individual errors from an errors.Join result.
-func unwrapJoined(err error) []error {
-	if u, ok := err.(interface{ Unwrap() []error }); ok {
-		return u.Unwrap()
-	}
-	return []error{err}
 }

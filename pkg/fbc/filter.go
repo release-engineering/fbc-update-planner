@@ -23,29 +23,27 @@ import "fmt"
 type Filter func(*Package) []string
 
 type filterEntry struct {
-	Label   string
-	Group   string // "filter"
-	Filters []Filter
+	Label  string
+	Group  string // "filter" or "invariant"
+	Filter Filter
 }
 
 var filterRegistry = []filterEntry{
 	// Mutation filters run first, followed by invariant validators.
-	{"FBC-MUTATIONS", "mutations", []Filter{FilterIncompletePhases}},
+	{"FBC-MUTATE-01", "filter", FilterIncompletePhases},
 	// Invariants required by FBC consumers. These must not be relaxed.
-	{"FBC-INVARIANTS", "invariants", []Filter{
-		ValidatePackageHasVersions,
-		ValidateVersionsHavePhases,
-		ValidatePhaseDates,
-		ValidateDateOrdering,
-		ValidatePhaseContiguity,
-	}},
+	{"FBC-VAL-01", "invariant", ValidatePackageHasVersions},
+	{"FBC-VAL-02", "invariant", ValidateVersionsHavePhases},
+	{"FBC-VAL-03", "invariant", ValidatePhaseDates},
+	{"FBC-VAL-04", "invariant", ValidateDateOrdering},
+	{"FBC-VAL-05", "invariant", ValidatePhaseContiguity},
 }
 
 // DefaultFilters returns the standard processing pipeline for FBC output cleanup.
 func DefaultFilters() []Filter {
-	var result []Filter
-	for _, entry := range filterRegistry {
-		result = append(result, entry.Filters...)
+	result := make([]Filter, len(filterRegistry))
+	for i, entry := range filterRegistry {
+		result[i] = entry.Filter
 	}
 	return result
 }
@@ -75,34 +73,37 @@ func FilterIncompletePhases(p *Package) []string {
 }
 
 // ValidatePackageHasVersions rejects a package that has no versions.
+// FBC-VAL-01
 func ValidatePackageHasVersions(p *Package) []string {
 	if len(p.Versions) == 0 {
-		return []string{"package has no versions"}
+		return []string{"FBC-VAL-01: package has no versions"}
 	}
 	return nil
 }
 
 // ValidateVersionsHavePhases rejects a package if any version has no phases.
+// FBC-VAL-02
 func ValidateVersionsHavePhases(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		if len(v.Phases) == 0 {
-			reasons = append(reasons, fmt.Sprintf("version %s has no phases", v.Name))
+			reasons = append(reasons, fmt.Sprintf("FBC-VAL-02: version %s has no phases", v.Name))
 		}
 	}
 	return reasons
 }
 
 // ValidatePhaseDates rejects a package if any phase has a nil start or end date.
+// FBC-VAL-03
 func ValidatePhaseDates(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		for _, ph := range v.Phases {
 			if ph.StartDate == nil {
-				reasons = append(reasons, fmt.Sprintf("version %s phase %q has nil start date", v.Name, ph.Name))
+				reasons = append(reasons, fmt.Sprintf("FBC-VAL-03: version %s phase %q has nil start date", v.Name, ph.Name))
 			}
 			if ph.EndDate == nil {
-				reasons = append(reasons, fmt.Sprintf("version %s phase %q has nil end date", v.Name, ph.Name))
+				reasons = append(reasons, fmt.Sprintf("FBC-VAL-03: version %s phase %q has nil end date", v.Name, ph.Name))
 			}
 		}
 	}
@@ -111,6 +112,7 @@ func ValidatePhaseDates(p *Package) []string {
 
 // ValidateDateOrdering rejects a package if any phase has a start date after its end date.
 // Point-in-time phases (nil start or end date) are ignored.
+// FBC-VAL-04
 func ValidateDateOrdering(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
@@ -120,7 +122,7 @@ func ValidateDateOrdering(p *Package) []string {
 			}
 			if ph.StartDate.Compare(*ph.EndDate) > 0 {
 				reasons = append(reasons, fmt.Sprintf(
-					"version %s phase %q start date %s is after end date %s",
+					"FBC-VAL-04: version %s phase %q start date %s is after end date %s",
 					v.Name, ph.Name, ph.StartDate, ph.EndDate,
 				))
 			}
@@ -133,6 +135,7 @@ func ValidateDateOrdering(p *Package) []string {
 // not contiguous. Phases are contiguous when the end date of each phase is
 // exactly the day before the start date of the next phase.
 // Point-in-time phases (nil start or end date) are ignored.
+// FBC-VAL-05
 func ValidatePhaseContiguity(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
@@ -144,7 +147,7 @@ func ValidatePhaseContiguity(p *Package) []string {
 			}
 			if cur.EndDate.NextDay().Compare(*next.StartDate) != 0 {
 				reasons = append(reasons, fmt.Sprintf(
-					"version %s: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",
+					"FBC-VAL-05: version %s: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",
 					v.Name, cur.Name, cur.EndDate, next.Name, next.StartDate,
 				))
 			}

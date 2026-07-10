@@ -43,9 +43,9 @@ func TestNewPackage(t *testing.T) {
 		},
 	}
 
-	pkg, err := newPackage(product)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	pkg, errs := newPackage(product)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
 	}
 
 	if pkg.Schema != Schema {
@@ -82,9 +82,9 @@ func TestNewPackageNATimestamp(t *testing.T) {
 		}},
 	}
 
-	pkg, err := newPackage(product)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	pkg, errs := newPackage(product)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
 	}
 	ph := pkg.Versions[0].Phases[0]
 	if ph.StartDate != nil {
@@ -107,9 +107,9 @@ func TestNewPackageUnparseableTimestamp(t *testing.T) {
 		}},
 	}
 
-	_, err := newPackage(product)
-	if err == nil {
-		t.Fatal("expected error for unparseable timestamp, got nil")
+	_, errs := newPackage(product)
+	if len(errs) == 0 {
+		t.Fatal("expected errors for unparseable timestamp, got nil")
 	}
 }
 
@@ -124,9 +124,9 @@ func TestNewPackageEmptyTimestamp(t *testing.T) {
 		}},
 	}
 
-	pkg, err := newPackage(product)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	pkg, errs := newPackage(product)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
 	}
 	ph := pkg.Versions[0].Phases[0]
 	if ph.StartDate != nil {
@@ -147,9 +147,9 @@ func TestNewPackageInvalidVersionName(t *testing.T) {
 		}},
 	}
 
-	pkg, err := newPackage(product)
-	if err == nil {
-		t.Fatal("expected error for invalid version name, got nil")
+	pkg, errs := newPackage(product)
+	if len(errs) == 0 {
+		t.Fatal("expected errors for invalid version name, got nil")
 	}
 	if pkg != nil {
 		t.Errorf("expected nil package on error, got %+v", pkg)
@@ -170,9 +170,9 @@ func TestTranslateVersionOCPIgnored(t *testing.T) {
 				Name:                   "1.0",
 				OpenShiftCompatibility: tt.compat,
 			}
-			fv, err := translateVersion(v)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			fv, errs := translateVersion(v)
+			if len(errs) > 0 {
+				t.Fatalf("unexpected errors: %v", errs)
 			}
 			if len(fv.PlatformCompatibility) != 0 {
 				t.Errorf("expected no platform compatibility, got %d", len(fv.PlatformCompatibility))
@@ -186,8 +186,8 @@ func TestTranslateVersionInvalidOCP(t *testing.T) {
 		Name:                   "1.0",
 		OpenShiftCompatibility: "4.12, bad-version",
 	}
-	_, err := translateVersion(v)
-	if err == nil {
-		t.Fatal("expected error for invalid OCP compatibility version")
+	_, errs := translateVersion(v)
+	if len(errs) == 0 {
+		t.Fatal("expected errors for invalid OCP compatibility version")
 	}
 }
