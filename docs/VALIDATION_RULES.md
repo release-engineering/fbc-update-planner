@@ -133,15 +133,20 @@ The pipeline is defined by `filterRegistry` in `pkg/fbc/filter.go`. Each filter 
 type Filter func(*Package) []string
 ```
 
-Filters **mutate** packages to produce clean FBC output (e.g., drop incomplete phases). They do not perform validation — data quality checks belong in the PLCC validators. Returning a non-empty `[]string` rejects the package; returning `nil` means the package passes.
+Filters **mutate** packages and enforce structural invariants on translated FBC output. Mutation filters clean up data (e.g., drop incomplete phases); invariant validators reject packages that violate FBC schema requirements. Returning a non-empty `[]string` rejects the package; returning `nil` means the package passes.
 
 Filters run in order, and the pipeline **short-circuits**: the first filter that returns reasons stops execution.
 
 The default pipeline:
 
-| # | Function | Kind | Purpose |
-|---|----------|------|---------|
-| 1 | `FilterIncompletePhases` | mutate | Drop phases where either date is nil |
+| # | Function | Label | Kind | Purpose |
+|---|----------|-------|------|---------|
+| 1 | `FilterIncompletePhases` | FBC-MUTATE-01 | mutate | Drop phases where either date is nil |
+| 2 | `ValidatePackageHasVersions` | FBC-VAL-01 | invariant | Package must have ≥1 version |
+| 3 | `ValidateVersionsHavePhases` | FBC-VAL-02 | invariant | Every version must have ≥1 phase |
+| 4 | `ValidatePhaseDates` | FBC-VAL-03 | invariant | Every phase must have non-nil start and end dates |
+| 5 | `ValidateDateOrdering` | FBC-VAL-04 | invariant | Phase start date must not be after end date |
+| 6 | `ValidatePhaseContiguity` | FBC-VAL-05 | invariant | Consecutive phases must be contiguous (end + 1 day = next start) |
 
 ### `FilterIncompletePhases`
 
@@ -153,13 +158,13 @@ This filter always returns `nil` — it mutates the package but never rejects it
 
 ## Adding a New FBC Filter
 
-Filters live in `pkg/fbc/filter.go` and are for **output cleanup only** — mutating or dropping data to produce clean FBC blobs. Data quality validation belongs in the PLCC validators (`pkg/plcc/validation.go`).
+Filters live in `pkg/fbc/filter.go` and handle output cleanup (mutations) and FBC structural invariants (validation). PLCC-level data quality checks belong in the PLCC validators (`pkg/plcc/validation.go`).
 
 1. **Write a new function** with signature `func(p *Package) []string`.
     * Mutate the package `p` as needed (e.g., drop or rewrite data).
     * Return `nil` to accept or a list of reason strings to reject.
 
-2. **Add an entry to `filterRegistry`** with a label (e.g. `FBC-FILTER-02`) and group `"filter"`.
+2. **Add an entry to `filterRegistry`** with a label (e.g. `FBC-MUTATE-02` for mutations, `FBC-VAL-07` for invariants) and group. Embed the label in all reason strings.
 
 3. **Add a test** in `pkg/fbc/filter_test.go`.
 
