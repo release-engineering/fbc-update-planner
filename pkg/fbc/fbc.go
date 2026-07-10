@@ -17,11 +17,10 @@ limitations under the License.
 package fbc
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"sort"
-	"strconv"
-	"strings"
+	"slices"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
@@ -39,7 +38,7 @@ type Package struct {
 
 // Version represents an operator version with its lifecycle phases and platform compatibility.
 type Version struct {
-	Name                  string     `json:"name"`
+	Name                  MajorMinor `json:"name"`
 	Phases                []Phase    `json:"phases"`
 	PlatformCompatibility []Platform `json:"platformCompatibility,omitempty"`
 }
@@ -47,14 +46,14 @@ type Version struct {
 // Phase represents a lifecycle phase with start and end dates.
 type Phase struct {
 	Name      string `json:"name"`
-	StartDate string `json:"startDate"`
-	EndDate   string `json:"endDate"`
+	StartDate *Date  `json:"startDate,omitempty"`
+	EndDate   *Date  `json:"endDate,omitempty"`
 }
 
 // Platform represents platform compatibility information.
 type Platform struct {
-	Name     string   `json:"name"`
-	Versions []string `json:"versions"`
+	Name     string       `json:"name"`
+	Versions []MajorMinor `json:"versions"`
 }
 
 // GenerateFBC converts PLCC products to FBC data, writing valid packages to output
@@ -77,6 +76,33 @@ func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer,
 	return len(valid), nil
 }
 
+// TranslateProduct converts a single PLCC product to an FBC package, running
+// it through the provided filter pipeline. Returns the package on success, or
+// nil and a ValidationResult on failure.
+func TranslateProduct(product plcc.Product, filters ...Filter) (*Package, *report.ValidationResult) {
+	pkg, err := newPackage(product)
+	if err != nil {
+		var reasons []string
+		for _, e := range unwrapJoined(err) {
+			reasons = append(reasons, e.Error())
+		}
+		return nil, &report.ValidationResult{
+			PackageName: product.Package,
+			Valid:       false,
+			Reasons:     reasons,
+		}
+	}
+	reasons := pkg.Filter(filters...)
+	if len(reasons) > 0 {
+		return nil, &report.ValidationResult{
+			PackageName: product.Package,
+			Valid:       false,
+			Reasons:     reasons,
+		}
+	}
+	return pkg, nil
+}
+
 // Translate converts PLCC products to FBC packages, running each through the
 // provided filter pipeline. Filters may mutate packages (e.g., drop incomplete
 // phases) or reject them. Returns the valid packages and a list of rejections.
@@ -86,90 +112,58 @@ func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report
 	var failures []report.ValidationResult
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
-		pkg := newPackage(product)
-		reasons := pkg.Filter(filters...)
-		if len(reasons) > 0 {
-			failures = append(failures, report.ValidationResult{
-				PackageName: product.Package,
-				Valid:       false,
-				Reasons:     reasons,
-			})
+		pkg, failure := TranslateProduct(product, filters...)
+		if failure != nil {
+			failures = append(failures, *failure)
 			continue
 		}
-
 		validPackages = append(validPackages, pkg)
 	}
-
 	return validPackages, failures
 }
 
-func newPackage(product plcc.Product) *Package {
+func newPackage(product plcc.Product) (*Package, error) {
 	pkg := &Package{
 		Schema: Schema,
 		Name:   product.Package,
 	}
 
+	var errs []error
 	for _, v := range product.Versions {
-		pkg.Versions = append(pkg.Versions, translateVersion(v))
+		fv, err := translateVersion(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("version %q: %w", v.Name, err))
+			continue
+		}
+		pkg.Versions = append(pkg.Versions, *fv)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
-	sort.Slice(pkg.Versions, func(i, j int) bool {
-		return compareMajorMinor(pkg.Versions[i].Name, pkg.Versions[j].Name) < 0
+	slices.SortFunc(pkg.Versions, func(a, b Version) int {
+		return a.Name.Compare(b.Name)
 	})
 
-	return pkg
+	return pkg, nil
 }
 
-func translateVersion(v plcc.Version) Version {
-	fv := Version{Name: v.Name}
-
-	for _, ph := range v.Phases {
-		fv.Phases = append(fv.Phases, translatePhase(ph))
+func translateVersion(v plcc.Version) (*Version, error) {
+	dst := &Version{}
+	var errs []error
+	for _, conv := range DefaultConverters() {
+		errs = append(errs, conv(v, dst)...)
 	}
-
-	if v.OpenShiftCompatibility != "" && v.OpenShiftCompatibility != "N/A" {
-		var ocpVersions []string
-		for _, p := range strings.Split(v.OpenShiftCompatibility, ",") {
-			trimmed := strings.TrimSpace(p)
-			if trimmed != "" {
-				ocpVersions = append(ocpVersions, trimmed)
-			}
-		}
-		if len(ocpVersions) > 0 {
-			fv.PlatformCompatibility = []Platform{{
-				Name:     "openshift",
-				Versions: ocpVersions,
-			}}
-		}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
-
-	return fv
+	return dst, nil
 }
 
-func translatePhase(ph plcc.Phase) Phase {
-	start := ""
-	if t, err := plcc.ParseTimestamp(ph.StartDate); err == nil {
-		start = plcc.FormatDate(t)
+// unwrapJoined extracts individual errors from an errors.Join result.
+func unwrapJoined(err error) []error {
+	if u, ok := err.(interface{ Unwrap() []error }); ok {
+		return u.Unwrap()
 	}
-	end := ""
-	if t, err := plcc.ParseTimestamp(ph.EndDate); err == nil {
-		end = plcc.FormatDate(t)
-	}
-	return Phase{Name: ph.Name, StartDate: start, EndDate: end}
-}
-
-func compareMajorMinor(a, b string) int {
-	aParts := strings.SplitN(a, ".", 2)
-	bParts := strings.SplitN(b, ".", 2)
-	if len(aParts) < 2 || len(bParts) < 2 {
-		return strings.Compare(a, b)
-	}
-	aMajor, _ := strconv.Atoi(aParts[0])
-	bMajor, _ := strconv.Atoi(bParts[0])
-	if aMajor != bMajor {
-		return aMajor - bMajor
-	}
-	aMinor, _ := strconv.Atoi(aParts[1])
-	bMinor, _ := strconv.Atoi(bParts[1])
-	return aMinor - bMinor
+	return []error{err}
 }

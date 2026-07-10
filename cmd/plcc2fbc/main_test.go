@@ -126,6 +126,16 @@ func TestRun(t *testing.T) {
 			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", t.TempDir() + "/out.json"},
 			wantPkgNotFound: true,
 		},
+		{
+			name:    "split fails on untranslatable package",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--split", t.TempDir()},
+			wantErr: "failed FBC translation",
+		},
+		{
+			name:    "split yaml fails on untranslatable package",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "-o", "yaml", "--split", t.TempDir()},
+			wantErr: "failed FBC translation",
+		},
 	}
 
 	for _, tt := range tests {
@@ -245,7 +255,7 @@ func TestRunSuccess(t *testing.T) {
 		{
 			name: "split json",
 			args: func(out string) []string {
-				return []string{"plcc2fbc", "-i", testdataInput, "--split", filepath.Dir(out)}
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nfd", "--permissive", "--split", filepath.Dir(out)}
 			},
 			skipFileCheck: true,
 			checks: func(t *testing.T, outFile string) {
@@ -254,12 +264,12 @@ func TestRunSuccess(t *testing.T) {
 				if err != nil {
 					t.Fatalf("reading output dir: %v", err)
 				}
-				if len(entries) == 0 {
-					t.Fatal("no package directories created")
+				if len(entries) != 2 {
+					t.Fatalf("expected 2 package directories, got %d", len(entries))
 				}
 				for _, entry := range entries {
 					if !entry.IsDir() {
-						continue
+						t.Fatalf("expected directory, got file: %s", entry.Name())
 					}
 					lf := filepath.Join(dir, entry.Name(), "lifecycle.json")
 					info, err := os.Stat(lf)
@@ -276,7 +286,7 @@ func TestRunSuccess(t *testing.T) {
 		{
 			name: "split yaml",
 			args: func(out string) []string {
-				return []string{"plcc2fbc", "-i", testdataInput, "-o", "yaml", "--split", filepath.Dir(out)}
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator", "--permissive", "-o", "yaml", "--split", filepath.Dir(out)}
 			},
 			skipFileCheck: true,
 			checks: func(t *testing.T, outFile string) {
@@ -285,8 +295,8 @@ func TestRunSuccess(t *testing.T) {
 				if err != nil {
 					t.Fatalf("reading output dir: %v", err)
 				}
-				if len(entries) == 0 {
-					t.Fatal("no package directories created")
+				if len(entries) != 1 {
+					t.Fatalf("expected 1 package directory, got %d", len(entries))
 				}
 				lf := filepath.Join(dir, entries[0].Name(), "lifecycle.yaml")
 				if _, err := os.Stat(lf); err != nil {

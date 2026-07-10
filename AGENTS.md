@@ -20,10 +20,14 @@ pkg/plcc/plcc.go              PLCC API client, data types, filtering, sorting
 pkg/plcc/validation.go        PLCC validator registry — per-product and catalog-level checks
 pkg/plcc/plcc_test.go         Tests for PLCC package
 pkg/plcc/validation_test.go   Tests for PLCC validators
-pkg/fbc/fbc.go                FBC schema, PLCC→FBC translation, GenerateFBC()
+pkg/fbc/doc.go                Package documentation
+pkg/fbc/types.go              Structured FBC types: MajorMinor, Date
+pkg/fbc/fbc.go                FBC schema, GenerateFBC(), Translate(), TranslateProduct()
 pkg/fbc/fbc_test.go           Tests for FBC translation
-pkg/fbc/filter.go             Output cleanup pipeline — mutation-only filters
-pkg/fbc/filter_test.go        Tests for individual filters
+pkg/fbc/conversion.go         Converter registry — PLCC→FBC field translation checks
+pkg/fbc/conversion_test.go    Tests for converters
+pkg/fbc/filter.go             Filter registry — output cleanup pipeline
+pkg/fbc/filter_test.go        Tests for filters
 pkg/fbc/writer.go             PackageWriter interface + JSON/YAML serializers
 pkg/fbc/writer_test.go        Tests for writers
 pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference output
@@ -40,7 +44,7 @@ fbc-samples/                  Generated FBC snapshots (YAML, logs, validation lo
 
 ```sh
 make build          # → bin/plcc2fbc
-make test           # go test -v ./...
+make test           # go test -v -count 1 ./...
 make generate-fbc   # build + run against live PLCC API, write YAML + logs to fbc-samples/
 ```
 
@@ -73,17 +77,23 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
   → catalog.SortByPackage()         # alphabetical
   → catalog.Validate()              # catalog-level PLCC validators (cross-product checks)
   → plcc.ValidateProduct()          # per-product PLCC validators (filter out failures; --permissive keeps them)
-  → fbc.GenerateFBC()               # translate + output cleanup + emit via PackageWriter
+  → fbc.GenerateFBC()               # translate all + filter + write via PackageWriter
+
+With --split:
+  → fbc.TranslateProduct()          # per product: convert + filter, fail-fast on first error
+  → writer.Write()                  # write each package to <dir>/<package>/lifecycle.{json,yaml}
 
 With --dump-plcc:
   → catalog.Dump()                  # write filtered PLCC JSON directly, skip FBC generation
 ```
 
-### Validation and output cleanup — two distinct layers
+### Three pipeline layers
 
 1. **PLCC validators** (`pkg/plcc/validation.go`): data quality checks on raw `plcc.Product` values *before* FBC translation. By default they filter out failing packages; with `--permissive` they produce warnings only. Organized in two registries (`validatorRegistry` for per-product, `catalogValidatorRegistry` for cross-product) with labels (e.g. `REQ-DATE-03`, `CUSTOM-01`, `REQ-VAL-01`) and groups (`syntax`, `semantic`, `catalog`). Selectable via `--validators` flag.
 
-2. **FBC filter pipeline** (`pkg/fbc/filter.go`): output cleanup on translated `*fbc.Package` values. Filters mutate packages to produce clean FBC blobs. Currently only `FilterIncompletePhases` (drops phases with missing dates). No validation logic — that belongs in PLCC validators. See `docs/VALIDATION_RULES.md` for the full specification.
+2. **FBC converters** (`pkg/fbc/conversion.go`): type-checked field translation from `plcc.Version` to `fbc.Version`. Each converter validates one aspect and populates the corresponding output field. Organized in `converterRegistry` with labels (`FBC-VER-01` version name, `FBC-PHASE-01` phase timestamps, `FBC-OCP-01` OCP compatibility). Always run — cannot be disabled. If any converter returns errors, the entire package is rejected.
+
+3. **FBC filter pipeline** (`pkg/fbc/filter.go`): output cleanup on translated `*fbc.Package` values. Filters mutate packages to produce clean FBC blobs. Organized in `filterRegistry` with labels (`FBC-FILTER-01` incomplete phases). Currently only `FilterIncompletePhases` (drops phases with missing dates). No validation logic — that belongs in PLCC validators. See `docs/VALIDATION_RULES.md` for the full specification.
 
 ### Key Types
 
@@ -92,6 +102,9 @@ With --dump-plcc:
 - `plcc.Validator` — `func(Product) []string` — per-product validator callback
 - `plcc.CatalogValidator` — `func([]Product) CatalogRejections` — cross-product validator
 - `fbc.Package` / `fbc.Version` / `fbc.Phase` / `fbc.Platform` — output-side types
+- `fbc.MajorMinor` — structured MAJOR.MINOR version (regex-validated, no leading zeros)
+- `fbc.Date` — structured YYYY-MM-DD date; `*Date` fields use nil for absent dates
+- `fbc.Converter` — `func(src plcc.Version, dst *Version) []error` — conversion check callback
 - `fbc.Filter` — `func(*Package) []string` — output cleanup pipeline callback
 - `fbc.PackageWriter` — interface for serializing packages (JSON, JSON-pretty, YAML)
 - `report.ValidationResult` — structured JSON logged to stderr (or to a file via `-l`) for rejected/warned packages
@@ -109,10 +122,16 @@ Output blobs use schema `io.openshift.operators.lifecycles.v1alpha1`. See `docs/
 3. For cross-product checks, use `CatalogValidator` signature and add to `catalogValidatorRegistry`
 4. Add test in `pkg/plcc/validation_test.go` — table-driven, cover accept + reject paths
 
+### Adding an FBC converter
+
+1. Write `func ConvertMyField(src plcc.Version, dst *Version) []error` in `pkg/fbc/conversion.go`
+2. Add an entry to `converterRegistry` with a label (e.g. `FBC-FOO-01`) and group `"converter"`
+3. Add test in `pkg/fbc/conversion_test.go` — table-driven, cover valid + invalid inputs
+
 ### Adding an FBC output filter
 
 1. Write `func FilterMyCleanup(p *Package) []string` in `pkg/fbc/filter.go`
-2. Add it to `DefaultFilters()` — mutation only, no validation
+2. Add an entry to `filterRegistry` with a label (e.g. `FBC-FILTER-02`) and group `"filter"` — mutation only, no validation
 3. Add test in `pkg/fbc/filter_test.go` — table-driven
 4. Read `docs/VALIDATION_RULES.md` first
 
@@ -131,7 +150,7 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 - PLCC API uses ISO8601 with milliseconds: `2025-11-11T00:00:00.000Z`
 - FBC output uses `YYYY-MM-DD`
-- `"N/A"` or empty timestamps translate to empty strings (lenient parsing)
+- `"N/A"` or empty timestamps translate to nil (omitted from output)
 
 ## Gotchas
 
@@ -140,6 +159,6 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - All `.go` files must have the Apache 2.0 license header
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
-- Design choice: `newPackage()` silently converts unparseable timestamps to empty strings; PLCC validators catch data quality issues upstream, FBC filters then clean up the translated output
+- Design choice: `newPackage()` delegates to `translateVersion()` which runs the converter registry (`DefaultConverters()`); any converter error (malformed version name, unparseable timestamps, invalid OCP format) rejects the entire package. The FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
 - Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used

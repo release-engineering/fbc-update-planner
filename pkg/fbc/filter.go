@@ -20,11 +20,23 @@ package fbc
 // A non-empty return means the package should be rejected.
 type Filter func(*Package) []string
 
+type filterEntry struct {
+	Label   string
+	Group   string // "filter"
+	Filters []Filter
+}
+
+var filterRegistry = []filterEntry{
+	{"FBC-FILTER-01", "filter", []Filter{FilterIncompletePhases}},
+}
+
 // DefaultFilters returns the standard processing pipeline for FBC output cleanup.
 func DefaultFilters() []Filter {
-	return []Filter{
-		FilterIncompletePhases,
+	var result []Filter
+	for _, entry := range filterRegistry {
+		result = append(result, entry.Filters...)
 	}
+	return result
 }
 
 // Filter runs filters in order, stopping at the first one that returns reasons.
@@ -37,12 +49,12 @@ func (p *Package) Filter(filters ...Filter) []string {
 	return nil
 }
 
-// FilterIncompletePhases removes phases where either date is empty from all versions.
+// FilterIncompletePhases removes phases where either date is nil from all versions.
 func FilterIncompletePhases(p *Package) []string {
 	for i := range p.Versions {
 		filtered := p.Versions[i].Phases[:0]
 		for _, ph := range p.Versions[i].Phases {
-			if ph.StartDate != "" && ph.EndDate != "" {
+			if ph.StartDate != nil && ph.EndDate != nil {
 				filtered = append(filtered, ph)
 			}
 		}

@@ -48,8 +48,8 @@ const (
 var TierModelCutoffDate = time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC)
 
 var (
-	eusPhases       = []string{PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
-	majorMinorRegex = regexp.MustCompile(`^\d+\.\d+$`)
+	eusPhases        = []string{PhaseEUSTerm1, PhaseEUSTerm2, PhaseEUSTerm3}
+	majorMinorRegexp = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
 )
 
 // Validator checks a raw PLCC Product for data quality issues.
@@ -357,7 +357,7 @@ func ValidateDatesContiguity(p Product) []string {
 func ValidateVersionNames(p Product) []string {
 	var reasons []string
 	for _, v := range p.Versions {
-		if !majorMinorRegex.MatchString(v.Name) {
+		if !majorMinorRegexp.MatchString(v.Name) {
 			reasons = append(reasons, fmt.Sprintf("REQ-VER-01: version name %q is not MAJOR.MINOR", v.Name))
 		}
 	}
@@ -608,7 +608,7 @@ func ValidateOCPFormat(p Product) []string {
 		}
 		for _, part := range strings.Split(ocp, ",") {
 			ver := strings.TrimSpace(part)
-			if ver != "" && !majorMinorRegex.MatchString(ver) {
+			if ver != "" && !majorMinorRegexp.MatchString(ver) {
 				reasons = append(reasons, fmt.Sprintf("REQ-FIELD-02: version %q: OCP compatibility %q is not MAJOR.MINOR", v.Name, ver))
 			}
 		}
@@ -691,7 +691,7 @@ func ValidateOCPFormatAll(p Product) []string {
 		}
 		for _, part := range strings.Split(ocp, ",") {
 			ver := strings.TrimSpace(part)
-			if ver != "" && !majorMinorRegex.MatchString(ver) {
+			if ver != "" && !majorMinorRegexp.MatchString(ver) {
 				reasons = append(reasons, fmt.Sprintf("CUSTOM-04: version %q: OCP compatibility %q is not MAJOR.MINOR", v.Name, ver))
 			}
 		}

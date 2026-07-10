@@ -6,37 +6,12 @@ This document describes the rules that `plcc2fbc` uses to validate data from the
 
 ## Overview
 
-After PLCC data is fetched, each product passes through two stages:
+After PLCC data is fetched, each product passes through four stages:
 
-1. **PLCC-level validation** (`pkg/plcc/validation.go`): validators that check raw PLCC data quality (tier, release cadence, phase completeness, dates, duplicates). Organized into three groups: `syntax`, `semantic`, and `catalog`. By default these **filter out** failing packages; with `--permissive` they produce warnings only. Use `--validators` to select which validators to run (by label or group: `all`, `syntax`, `semantic`, `catalog`).
-2. **Filter pipeline** (`pkg/fbc/filter.go`): an ordered sequence of `Filter` callbacks that clean the translated FBC output (e.g., drop incomplete phases).
-
-The Filter pipeline is modular and easily extensible, see how in the ["Adding a New Filter" section](#adding-a-new-filter).
-
----
-### Filter Pipeline
-
-The pipeline is defined by `DefaultFilters()` in `pkg/fbc/filter.go`. Each filter has the signature:
-
-```go
-type Filter func(*Package) []string
-```
-
-Filters **mutate** packages to produce clean FBC output (e.g., drop incomplete phases). They do not perform validation — data quality checks belong in the PLCC validators. Returning a non-empty `[]string` rejects the package; returning `nil` means the package passes.
-
-Filters run in order, and the pipeline **short-circuits**: the first filter that returns reasons stops execution.
-
-The default pipeline:
-
-| # | Function | Kind | Purpose |
-|---|----------|------|---------|
-| 1 | `FilterIncompletePhases` | mutate | Drop phases where either date is empty |
-
-#### `FilterIncompletePhases`
-
-Removes phases where either `startDate` or `endDate` is empty. This includes N/A phases (both empty) and point-in-time phases (one set, one empty).
-
-This filter always returns `nil` — it mutates the package but never rejects it.
+1. **PLCC filtering** (`pkg/plcc/plcc.go`): basic structural filtering before any validation runs. Drops products with no `package` name (`FilterPackages`). When `-p` is specified, keeps only the requested packages (`FilterByPackageNames`) and returns an error for any names not found.
+2. **[PLCC-level validation](#plcc-level-validation)** (`pkg/plcc/validation.go`): validators that check raw PLCC data quality (tier, release cadence, phase completeness, dates, duplicates). Organized into three groups: `syntax`, `semantic`, and `catalog`. By default these **filter out** failing packages; with `--permissive` they produce warnings only. Use `--validators` to select which validators to run (by label or group: `all`, `syntax`, `semantic`, `catalog`).
+3. **[FBC Converter Pipeline](#fbc-converter-pipeline)** (`pkg/fbc/conversion.go`): type-checked field translation from `plcc.Version` to `fbc.Version`. Each converter validates one field and populates the corresponding output. Organized in `converterRegistry`. Always run — cannot be disabled.
+4. **[FBC Filter Pipeline](#fbc-filter-pipeline)** (`pkg/fbc/filter.go`): an ordered sequence of `Filter` callbacks that clean the translated FBC output (e.g., drop incomplete phases). Organized in `filterRegistry`.
 
 ---
 
@@ -44,22 +19,21 @@ This filter always returns `nil` — it mutates the package but never rejects it
 
 | Condition | Stage | Effect |
 |---|---|---|
-| Product has no `package` | PLCC filtering | Silently skipped |
+| Product has no package name | PLCC filtering | Silently skipped |
 | Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--permissive` warning only |
-| Package maps to multiple products | PLCC catalog validation | All copies removed; with `--permissive` warning only |
-| Phase with empty start or end date | Filter pipeline | Phase silently removed |
+| Package maps to multiple products | PLCC-level validation | All copies removed; with `--permissive` warning only |
+| Invalid version name, timestamp, or OCP format | FBC converter pipeline | Entire package rejected |
+| Phase with nil start or end date | FBC filter pipeline | Phase silently removed |
 
 ---
 
+## PLCC-Level Validation
 
----
-### PLCC-Level Validation
-
-Before the FBC filter pipeline runs, `main.go` calls PLCC-level validators on each raw `plcc.Product`. These validators live in `pkg/plcc/validation.go` alongside the data types they check. By default, failing packages are **filtered out** and logged as structured JSON to stderr. Use `--permissive` to keep failing packages in the output (warnings only). Use `--validators` to select which validators to run (by label or group), and `--list-validators` to see available options.
+Before the FBC pipelines run, `main.go` calls PLCC-level validators on each raw `plcc.Product`. These validators live in `pkg/plcc/validation.go` alongside the data types they check. By default, failing packages are **filtered out** and logged as structured JSON to stderr. Use `--permissive` to keep failing packages in the output (warnings only). Use `--validators` to select which validators to run (by label or group), and `--list-validators` to see available options.
 
 Validators are split into three groups: `SyntaxValidators()` (data format/structure), `SemanticValidators()` (business/lifecycle rules), and `catalog` (cross-product checks). `DefaultValidators()` composes syntax + semantic; `DefaultCatalogValidators()` returns catalog-level checks. All three groups are included in `--validators all` (the default). Catalog-level checks run via `catalog.Validate()`.
 
-#### Pre-tier-model skip
+### Pre-tier-model skip
 
 The three-tier lifecycle model (Platform Aligned / Platform Agnostic / Rolling Stream) was introduced with OCP 4.14, which GA'd on 2023-10-31 (`TierModelCutoffDate`). Versions whose earliest parseable phase start date predates this cutoff — or that have no phases with parseable dates — are considered **pre-tier-model** and are exempt from tier-specific validators. This prevents false positives on legacy versions that were published before the tier model existed.
 
@@ -67,7 +41,7 @@ Tier-specific validators that apply the skip: `ValidateTierSelected` (REQ-TIER-A
 
 Universal invariants that always apply regardless of version age: `ValidateDatesStatic` (REQ-DATE-02), `ValidateDatesClean` (REQ-DATE-03), `ValidateDatesContiguity` (REQ-DATE-04), `ValidateVersionNames` (REQ-VER-01), `ValidatePhaseEndAfterStart` (CUSTOM-03), `ValidateReleaseCadence` (REQ-TIER-ALL-01), `ValidateIsOperator` (CUSTOM-01), `ValidateHasVersions` (CUSTOM-02).
 
-#### Syntax Validators
+### Syntax Validators
 
 | # | Function | Label | Purpose |
 |---|----------|-------|---------|
@@ -81,7 +55,7 @@ Universal invariants that always apply regardless of version age: `ValidateDates
 | 8 | `ValidateOCPFormat` | REQ-FIELD-02 | OCP compatibility on aligned versions must match `MAJOR.MINOR` |
 | 9 | `ValidateOCPFormatAll` | CUSTOM-04 | OCP compatibility format on non-aligned versions |
 
-#### Semantic Validators
+### Semantic Validators
 
 | # | Function | Label | Purpose |
 |---|----------|-------|---------|
@@ -95,17 +69,7 @@ Universal invariants that always apply regardless of version age: `ValidateDates
 | 8 | `ValidateRollingStreamPhases` | REQ-TIER-RS-01 | Rolling: Full Support with parseable dates |
 | 9 | `ValidateRollingStreamForbiddenPhases` | REQ-TIER-RS-02 | Rolling: must not include Maintenance or EUS phases |
 
-#### Catalog-Level Validators (group: `catalog`)
-
-Catalog validators are cross-product checks selectable via `--validators catalog` or by label (e.g. `--validators REQ-VAL-01`). They are included in `--validators all` (the default). By default, all products with a duplicated package name are removed (all copies, since we cannot determine which is authoritative). With `--permissive`, duplicates produce warnings only.
-
-| # | Function | Label | Purpose |
-|---|----------|-------|---------|
-| 1 | `ValidateNoDuplicates` | REQ-VAL-01 | No package name appears in multiple products |
-
----
-
-### OCP Cross-Reference (REQ-TIER-PA-01)
+#### OCP Cross-Reference (REQ-TIER-PA-01)
 
 `ValidatePlatformAlignedPhases` checks that platform-aligned operator versions have the required lifecycle phases with parseable dates. Rather than hardcoding all five phases (Full Support, Maintenance, EUS Terms 1/2/3), the validator cross-references the OCP (OpenShift Container Platform) product from the PLCC catalog to determine which phases are actually required.
 
@@ -131,9 +95,63 @@ An operator version with `openshift_compatibility: "4.17"`:
 An operator version with `openshift_compatibility: "4.16, 4.18"`:
 - OCP 4.16 has all five phases with dates → all five phases required (union semantics: if ANY referenced OCP version has EUS, the operator must too).
 
+### Catalog-Level Validators (group: `catalog`)
+
+Catalog validators are cross-product checks selectable via `--validators catalog` or by label (e.g. `--validators REQ-VAL-01`). They are included in `--validators all` (the default). By default, all products with a duplicated package name are removed (all copies, since we cannot determine which is authoritative). With `--permissive`, duplicates produce warnings only.
+
+| # | Function | Label | Purpose |
+|---|----------|-------|---------|
+| 1 | `ValidateNoDuplicates` | REQ-VAL-01 | No package name appears in multiple products |
+
 ---
 
-## Adding a New Filter
+## FBC Converter Pipeline
+
+The converter pipeline is defined by `converterRegistry` in `pkg/fbc/conversion.go`. Each converter has the signature:
+
+```go
+type Converter func(src plcc.Version, dst *Version) []error
+```
+
+Converters **validate and translate** one field of a PLCC version into the corresponding FBC version field. They always run during translation — they cannot be disabled. If any converter returns errors, the entire package is rejected.
+
+| # | Function | Label | Purpose |
+|---|----------|-------|---------|
+| 1 | `ConvertVersionName` | FBC-VER-01 | Parse version name as MAJOR.MINOR |
+| 2 | `ConvertPhases` | FBC-PHASE-01 | Translate phase timestamps to FBC dates |
+| 3 | `ConvertOCPCompatibility` | FBC-OCP-01 | Parse OCP compatibility versions as MAJOR.MINOR |
+
+`DefaultConverters()` returns all converters from the registry in order. `translateVersion()` iterates them to build each `fbc.Version`.
+
+---
+
+## FBC Filter Pipeline
+
+The pipeline is defined by `filterRegistry` in `pkg/fbc/filter.go`. Each filter has the signature:
+
+```go
+type Filter func(*Package) []string
+```
+
+Filters **mutate** packages to produce clean FBC output (e.g., drop incomplete phases). They do not perform validation — data quality checks belong in the PLCC validators. Returning a non-empty `[]string` rejects the package; returning `nil` means the package passes.
+
+Filters run in order, and the pipeline **short-circuits**: the first filter that returns reasons stops execution.
+
+The default pipeline:
+
+| # | Function | Kind | Purpose |
+|---|----------|------|---------|
+| 1 | `FilterIncompletePhases` | mutate | Drop phases where either date is nil |
+
+### `FilterIncompletePhases`
+
+Removes phases where either `startDate` or `endDate` is nil. This includes N/A phases (both nil) and point-in-time phases (one set, one nil).
+
+This filter always returns `nil` — it mutates the package but never rejects it.
+
+---
+
+## Adding a New FBC Filter
 
 Filters live in `pkg/fbc/filter.go` and are for **output cleanup only** — mutating or dropping data to produce clean FBC blobs. Data quality validation belongs in the PLCC validators (`pkg/plcc/validation.go`).
 
@@ -141,8 +159,8 @@ Filters live in `pkg/fbc/filter.go` and are for **output cleanup only** — muta
     * Mutate the package `p` as needed (e.g., drop or rewrite data).
     * Return `nil` to accept or a list of reason strings to reject.
 
-2. **Add it to `DefaultFilters()`** at the appropriate position.
+2. **Add an entry to `filterRegistry`** with a label (e.g. `FBC-FILTER-02`) and group `"filter"`.
 
 3. **Add a test** in `pkg/fbc/filter_test.go`.
 
-Note: `DefaultFilters()` returns a fresh slice each time, so callers can safely append or reorder filters for custom pipelines without affecting the default.
+Note: `DefaultFilters()` reads from `filterRegistry` and returns a fresh slice each time, so callers can safely append or reorder filters for custom pipelines without affecting the default.
