@@ -59,6 +59,7 @@ func run() (err error) {
 	var dumpPLCC bool
 	var inputPath string
 	var permissive bool
+	var allowMissing bool
 	var validatorsFlag string
 	var listValidators bool
 	var split bool
@@ -69,6 +70,7 @@ func run() (err error) {
 	flag.StringVarP(&inputPath, "input", "i", "", "read PLCC JSON input from a file instead of fetching from API")
 	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
 	flag.BoolVar(&permissive, "permissive", false, "keep packages that fail PLCC validation instead of filtering them out")
+	flag.BoolVar(&allowMissing, "allow-missing", false, "warn about missing -p packages instead of aborting")
 	flag.StringVar(&validatorsFlag, "validators", "all", "comma-separated list of validators to run (labels, groups: all, syntax, semantic, catalog)")
 	flag.BoolVar(&listValidators, "list-validators", false, "list available validators and exit")
 	flag.BoolVar(&split, "split", false, "write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory")
@@ -116,7 +118,7 @@ func run() (err error) {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
 
-	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict, reportWriter)
+	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict, allowMissing, reportWriter)
 	if err != nil {
 		var pkgErr *plcc.PackagesNotFoundError
 		if errors.As(err, &pkgErr) {
@@ -225,7 +227,7 @@ func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter, r
 	return blobCount, nil
 }
 
-func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, reportWriter io.Writer) (*plcc.Catalog, error) {
+func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMissing bool, reportWriter io.Writer) (*plcc.Catalog, error) {
 	var catalog *plcc.Catalog
 	var err error
 	if inputPath != "" {
@@ -248,7 +250,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 			}
 		}
 		if err := catalog.FilterByPackageNames(names); err != nil {
-			if strict {
+			if !allowMissing {
 				return nil, err
 			}
 			var pkgErr *plcc.PackagesNotFoundError

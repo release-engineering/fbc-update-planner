@@ -61,6 +61,7 @@ plcc2fbc [flags] <output-path>
 -i, --input         Read PLCC JSON from a file instead of fetching from API
     --dump-plcc     Dump filtered PLCC JSON instead of generating FBC
     --permissive    Keep packages that fail PLCC validation instead of filtering them out
+    --allow-missing Warn about missing -p packages instead of aborting
     --validators    Comma-separated validators to run: labels, or groups all/syntax/semantic/catalog (default: all)
     --list-validators  List available validators and exit
     --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory

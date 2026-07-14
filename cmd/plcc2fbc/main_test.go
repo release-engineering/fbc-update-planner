@@ -112,19 +112,24 @@ func TestRun(t *testing.T) {
 			wantErr: "unsafe package name",
 		},
 		{
-			name:         "permissive no matching packages",
-			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--permissive", t.TempDir() + "/out.json"},
-			wantNotFound: true,
+			name:            "permissive no matching packages",
+			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--permissive", t.TempDir() + "/out.json"},
+			wantPkgNotFound: true,
 		},
 		{
-			name:         "permissive split no matching packages",
-			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--permissive", "--split", t.TempDir()},
-			wantNotFound: true,
+			name:            "permissive split no matching packages",
+			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent-package", "--permissive", "--split", t.TempDir()},
+			wantPkgNotFound: true,
 		},
 		{
 			name:            "partial match errors by default",
 			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", t.TempDir() + "/out.json"},
 			wantPkgNotFound: true,
+		},
+		{
+			name:            "allow-missing without permissive still errors on partial match",
+			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent", "--allow-missing", t.TempDir() + "/out.json"},
+			wantNotFound:    true,
 		},
 		{
 			name:    "split fails on untranslatable package",
@@ -239,7 +244,23 @@ func TestRunSuccess(t *testing.T) {
 		{
 			name: "permissive partial match warns but succeeds",
 			args: func(out string) []string {
-				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--permissive", out}
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--permissive", "--allow-missing", out}
+			},
+			checks: func(t *testing.T, outFile string) {
+				data, err := os.ReadFile(outFile)
+				if err != nil {
+					t.Fatalf("reading output: %v", err)
+				}
+				content := string(data)
+				if !strings.Contains(content, "rhacs-operator") {
+					t.Error("output should contain rhacs-operator")
+				}
+			},
+		},
+		{
+			name: "allow-missing partial match warns but succeeds",
+			args: func(out string) []string {
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--allow-missing", "--permissive", out}
 			},
 			checks: func(t *testing.T, outFile string) {
 				data, err := os.ReadFile(outFile)
