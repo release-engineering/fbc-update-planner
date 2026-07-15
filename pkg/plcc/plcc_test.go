@@ -26,6 +26,30 @@ import (
 	"time"
 )
 
+func TestPackages(t *testing.T) {
+	tests := []struct {
+		name    string
+		pkg     string
+		want    []string
+	}{
+		{"simple pair", "alpha,beta", []string{"alpha", "beta"}},
+		{"trailing comma", "alpha,", []string{"alpha"}},
+		{"double comma", "alpha,,beta", []string{"alpha", "beta"}},
+		{"spaces trimmed", " alpha , beta ", []string{"alpha", "beta"}},
+		{"only commas", ",", nil},
+		{"empty string", "", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := Product{Package: tt.pkg}
+			got := p.Packages()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Packages() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindProductByName(t *testing.T) {
 	catalog := &Catalog{Data: []Product{
 		{Name: "Product A", Package: "pkg-a"},

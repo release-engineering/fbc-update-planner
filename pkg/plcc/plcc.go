@@ -56,18 +56,24 @@ type Product struct {
 	IsOperator     bool      `json:"is_operator"`
 }
 
-// Packages returns the trimmed package names for this product. The package field
-// may contain a comma-separated list (e.g. "odf-operator,mcg-operator").
-// Empty segments are intentionally not filtered; they won't match anything downstream.
+// Packages returns the trimmed, non-empty package names for this product. The
+// package field may contain a comma-separated list (e.g. "odf-operator,mcg-operator").
 func (p Product) Packages() []string {
 	if p.Package == "" {
 		return nil
 	}
 	parts := strings.Split(p.Package, ",")
-	for i, s := range parts {
-		parts[i] = strings.TrimSpace(s)
+	filtered := parts[:0]
+	for _, s := range parts {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			filtered = append(filtered, s)
+		}
 	}
-	return parts
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
 }
 
 // Version represents a product version with its lifecycle phases and platform compatibility.

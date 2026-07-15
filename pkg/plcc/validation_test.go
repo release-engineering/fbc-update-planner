@@ -889,6 +889,7 @@ func TestValidateNoDuplicates(t *testing.T) {
 		{"empty packages ignored", []Product{{Package: ""}, {Package: ""}}, true},
 		{"comma-separated duplicate", []Product{{Package: "a,b"}, {Package: "b"}}, false},
 		{"comma-separated no duplicate", []Product{{Package: "a,b"}, {Package: "c"}}, true},
+		{"trailing commas not false positive", []Product{{Package: "a,"}, {Package: "b,"}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
