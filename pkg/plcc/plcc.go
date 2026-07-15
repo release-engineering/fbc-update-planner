@@ -163,9 +163,9 @@ func (c *Catalog) FilterPackages() {
 
 // FilterByPackageNames keeps only products where at least one expanded package name
 // matches the provided list, modifying the catalog in place. It returns a
-// PackagesNotFoundError if any names were not found. A product with Package
-// "alpha-op,beta-op" is kept in full when either name matches, because the
-// underlying lifecycle data is shared across all names in the comma-separated list.
+// PackagesNotFoundError if any names were not found. When a product has
+// comma-separated names (e.g. "alpha-op,beta-op"), only the matched names are
+// preserved in the Package field so downstream expansion emits only requested packages.
 // The catalog is modified in place also in case of error.
 func (c *Catalog) FilterByPackageNames(names []string) error {
 	allowed := make(map[string]bool, len(names))
@@ -183,7 +183,15 @@ func (c *Catalog) FilterByPackageNames(names []string) error {
 			}
 		}
 		if matched {
-			filtered = append(filtered, c.Data[i])
+			p := c.Data[i]
+			var matchedNames []string
+			for _, pkg := range p.Packages() {
+				if allowed[pkg] {
+					matchedNames = append(matchedNames, pkg)
+				}
+			}
+			p.Package = strings.Join(matchedNames, ",")
+			filtered = append(filtered, p)
 		}
 	}
 	c.Data = filtered

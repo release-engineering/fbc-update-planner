@@ -192,6 +192,26 @@ func TestFilterByPackageNamesPartialMatch(t *testing.T) {
 	}
 }
 
+func TestFilterByPackageNamesNarrowsCommaSeparated(t *testing.T) {
+	c := &Catalog{Data: []Product{
+		{Name: "Multi", Package: "alpha,beta"},
+		{Name: "Single", Package: "gamma"},
+	}}
+	err := c.FilterByPackageNames([]string{"alpha", "gamma"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(c.Data) != 2 {
+		t.Fatalf("got %d products, want 2", len(c.Data))
+	}
+	if c.Data[0].Package != "alpha" {
+		t.Errorf("expected Package narrowed to %q, got %q", "alpha", c.Data[0].Package)
+	}
+	if c.Data[1].Package != "gamma" {
+		t.Errorf("expected Package %q, got %q", "gamma", c.Data[1].Package)
+	}
+}
+
 func TestSortByPackage(t *testing.T) {
 	c := &Catalog{Data: []Product{
 		{Package: "zebra"},
