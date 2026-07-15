@@ -159,6 +159,7 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 	}
 
 	filename := "lifecycle." + writer.Ext()
+	filters := fbc.DefaultFilters()
 	count := 0
 
 	for _, product := range products {
@@ -168,7 +169,7 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 			}
 			single := product
 			single.Package = pkgName
-			pkg, failure := fbc.TranslateProduct(single, fbc.DefaultFilters()...)
+			pkg, failure := fbc.TranslateProduct(single, filters...)
 			if failure != nil {
 				if err := report.LogResults(reportWriter, *failure); err != nil {
 					return 0, err
