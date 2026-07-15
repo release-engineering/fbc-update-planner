@@ -159,6 +159,7 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 	}
 
 	filename := "lifecycle." + writer.Ext()
+	count := 0
 
 	for _, product := range products {
 		for _, pkgName := range product.Packages() {
@@ -192,10 +193,11 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 			if cerr != nil {
 				return 0, fmt.Errorf("closing %s: %w", outPath, cerr)
 			}
+			count++
 		}
 	}
 
-	return len(products), nil
+	return count, nil
 }
 
 func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter, reportWriter io.Writer) (count int, err error) {
