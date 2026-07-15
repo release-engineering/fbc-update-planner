@@ -104,9 +104,17 @@ else
     echo "Running plcc2fbc with ${#operators[@]} operators..."
 fi
 set +e
-"$ROOT_DIR/bin/plcc2fbc" "${plcc2fbc_args[@]}" "$fbc_out" >"$log_out" 2>&1
+"$ROOT_DIR/bin/plcc2fbc" "${plcc2fbc_args[@]}" "$fbc_out" >"$log_out" 2>"$tmpdir/stderr.log"
 exit_code=$?
 set -e
+
+if [[ "$exit_code" -eq 1 ]]; then
+    echo "Error: plcc2fbc failed with a fatal error" >&2
+    if [[ -s "$tmpdir/stderr.log" ]]; then
+        cat "$tmpdir/stderr.log" >&2
+    fi
+    exit 1
+fi
 
 # --- Parse results ---
 
@@ -133,9 +141,17 @@ done
 
 # --- Copy output files ---
 if $validate_only; then
-    cp -f "$fbc_out" "$outdir/plcc-dump.json" 2>/dev/null || true
+    if [[ -f "$fbc_out" ]]; then
+        cp -f "$fbc_out" "$outdir/plcc-dump.json"
+    else
+        echo "Warning: no PLCC dump file produced (exit code $exit_code)" >&2
+    fi
 else
-    cp -f "$fbc_out" "$outdir/fbc-output.yaml" 2>/dev/null || true
+    if [[ -f "$fbc_out" ]]; then
+        cp -f "$fbc_out" "$outdir/fbc-output.yaml"
+    else
+        echo "Warning: no FBC output file produced (exit code $exit_code)" >&2
+    fi
 fi
 cp -f "$val_out" "$outdir/validation.jsonl"
 cp -f "$log_out" "$outdir/slog.json"

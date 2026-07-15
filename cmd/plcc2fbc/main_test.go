@@ -242,25 +242,9 @@ func TestRunSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "permissive partial match warns but succeeds",
-			args: func(out string) []string {
-				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--permissive", "--allow-missing", out}
-			},
-			checks: func(t *testing.T, outFile string) {
-				data, err := os.ReadFile(outFile)
-				if err != nil {
-					t.Fatalf("reading output: %v", err)
-				}
-				content := string(data)
-				if !strings.Contains(content, "rhacs-operator") {
-					t.Error("output should contain rhacs-operator")
-				}
-			},
-		},
-		{
 			name: "allow-missing partial match warns but succeeds",
 			args: func(out string) []string {
-				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--allow-missing", "--permissive", out}
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "rhacs-operator,nonexistent", "--permissive", "--allow-missing", out}
 			},
 			checks: func(t *testing.T, outFile string) {
 				data, err := os.ReadFile(outFile)
