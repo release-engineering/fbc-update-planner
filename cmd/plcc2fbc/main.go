@@ -159,39 +159,49 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 	}
 
 	filename := "lifecycle." + writer.Ext()
+	filters := fbc.DefaultFilters()
+	count := 0
 
 	for _, product := range products {
-		if !fs.ValidPath(product.Package) {
-			return 0, fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
-		}
-		pkg, failure := fbc.TranslateProduct(product, fbc.DefaultFilters()...)
-		if failure != nil {
-			if err := report.LogResults(reportWriter, *failure); err != nil {
-				return 0, err
+		for _, pkgName := range product.Packages() {
+			if !fs.ValidPath(pkgName) {
+				return 0, fmt.Errorf("unsafe package name %q: would escape output directory", pkgName)
 			}
-			return 0, fmt.Errorf("package %s failed FBC translation", product.Package)
-		}
-		pkgDir := filepath.Join(dir, product.Package)
-		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-			return 0, fmt.Errorf("creating package directory %s: %w", pkgDir, err)
-		}
-		outPath := filepath.Join(pkgDir, filename)
-		f, err := os.Create(outPath)
-		if err != nil {
-			return 0, fmt.Errorf("creating output file %s: %w", outPath, err)
-		}
-		werr := writer.Write(f, pkg)
-		cerr := f.Close()
-		if werr != nil {
-			_ = os.Remove(outPath)
-			return 0, fmt.Errorf("writing package %s: %w", product.Package, werr)
-		}
-		if cerr != nil {
-			return 0, fmt.Errorf("closing %s: %w", outPath, cerr)
+			single := product
+			single.Package = pkgName
+			pkg, failure := fbc.TranslateProduct(single, filters...)
+			if failure != nil {
+				if err := report.LogResults(reportWriter, *failure); err != nil {
+					return 0, err
+				}
+				return 0, fmt.Errorf("package %s failed FBC translation", pkgName)
+			}
+			pkgDir := filepath.Join(dir, pkgName)
+			if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+				return 0, fmt.Errorf("creating package directory %s: %w", pkgDir, err)
+			}
+			outPath := filepath.Join(pkgDir, filename)
+			f, err := os.Create(outPath)
+			if err != nil {
+				return 0, fmt.Errorf("creating output file %s: %w", outPath, err)
+			}
+			werr := writer.Write(f, pkg)
+			cerr := f.Close()
+			if werr != nil {
+				_ = os.Remove(outPath)
+				return 0, fmt.Errorf("writing package %s: %w", pkgName, werr)
+			}
+			if cerr != nil {
+				return 0, fmt.Errorf("closing %s: %w", outPath, cerr)
+			}
+			count++
 		}
 	}
 
-	return len(products), nil
+	if count == 0 {
+		return 0, errNoFBCOutput
+	}
+	return count, nil
 }
 
 func writeFile(products []plcc.Product, path string, writer fbc.PackageWriter, reportWriter io.Writer) (count int, err error) {

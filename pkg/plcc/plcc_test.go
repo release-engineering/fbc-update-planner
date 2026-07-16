@@ -26,6 +26,32 @@ import (
 	"time"
 )
 
+func TestPackages(t *testing.T) {
+	tests := []struct {
+		name    string
+		pkg     string
+		want    []string
+	}{
+		{"single name", "alpha", []string{"alpha"}},
+		{"simple pair", "alpha,beta", []string{"alpha", "beta"}},
+		{"trailing comma", "alpha,", []string{"alpha"}},
+		{"double comma", "alpha,,beta", []string{"alpha", "beta"}},
+		{"spaces trimmed", " alpha , beta ", []string{"alpha", "beta"}},
+		{"intra-product dedup", "alpha,alpha,beta", []string{"alpha", "beta"}},
+		{"only commas", ",", nil},
+		{"empty string", "", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := Product{Package: tt.pkg}
+			got := p.Packages()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Packages() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindProductByName(t *testing.T) {
 	catalog := &Catalog{Data: []Product{
 		{Name: "Product A", Package: "pkg-a"},
@@ -189,6 +215,26 @@ func TestFilterByPackageNamesPartialMatch(t *testing.T) {
 	}
 	if len(pkgErr.Names) != 2 || pkgErr.Names[0] != "missing-1" || pkgErr.Names[1] != "missing-2" {
 		t.Errorf("expected [missing-1 missing-2], got %v", pkgErr.Names)
+	}
+}
+
+func TestFilterByPackageNamesNarrowsCommaSeparated(t *testing.T) {
+	c := &Catalog{Data: []Product{
+		{Name: "Multi", Package: "alpha,beta"},
+		{Name: "Single", Package: "gamma"},
+	}}
+	err := c.FilterByPackageNames([]string{"alpha", "gamma"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(c.Data) != 2 {
+		t.Fatalf("got %d products, want 2", len(c.Data))
+	}
+	if c.Data[0].Package != "alpha" {
+		t.Errorf("expected Package narrowed to %q, got %q", "alpha", c.Data[0].Package)
+	}
+	if c.Data[1].Package != "gamma" {
+		t.Errorf("expected Package %q, got %q", "gamma", c.Data[1].Package)
 	}
 }
 

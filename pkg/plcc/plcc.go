@@ -56,6 +56,33 @@ type Product struct {
 	IsOperator     bool      `json:"is_operator"`
 }
 
+// Packages returns the unique, trimmed, non-empty package names for this
+// product. The package field may contain a comma-separated list (e.g.
+// "odf-operator,mcg-operator"). Duplicate names within the list are collapsed.
+func (p Product) Packages() []string {
+	if p.Package == "" {
+		return nil
+	}
+	parts := strings.Split(p.Package, ",")
+	seen := make(map[string]struct{}, len(parts))
+	var filtered []string
+	for _, s := range parts {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		filtered = append(filtered, s)
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
 // Version represents a product version with its lifecycle phases and platform compatibility.
 type Version struct {
 	Name                   string  `json:"name"`
@@ -140,15 +167,18 @@ func Load(path string) (*Catalog, error) {
 func (c *Catalog) FilterPackages() {
 	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
-		if p.Package != "" {
+		if len(p.Packages()) > 0 {
 			filtered = append(filtered, p)
 		}
 	}
 	c.Data = filtered
 }
 
-// FilterByPackageNames keeps only products whose package name is in the provided list,
-// modifying the catalog in place. It returns a PackagesNotFoundError if any names were not found.
+// FilterByPackageNames keeps only products where at least one expanded package name
+// matches the provided list, modifying the catalog in place. It returns a
+// PackagesNotFoundError if any names were not found. When a product has
+// comma-separated names (e.g. "alpha-op,beta-op"), only the matched names are
+// preserved in the Package field so downstream expansion emits only requested packages.
 // The catalog is modified in place also in case of error.
 func (c *Catalog) FilterByPackageNames(names []string) error {
 	allowed := make(map[string]bool, len(names))
@@ -157,10 +187,18 @@ func (c *Catalog) FilterByPackageNames(names []string) error {
 	}
 	found := make(map[string]bool, len(names))
 	filtered := make([]Product, 0, len(names))
-	for _, p := range c.Data {
-		if allowed[p.Package] {
+	for i := range c.Data {
+		var matchedNames []string
+		for _, pkg := range c.Data[i].Packages() {
+			if allowed[pkg] {
+				found[pkg] = true
+				matchedNames = append(matchedNames, pkg)
+			}
+		}
+		if len(matchedNames) > 0 {
+			p := c.Data[i]
+			p.Package = strings.Join(matchedNames, ",")
 			filtered = append(filtered, p)
-			found[p.Package] = true
 		}
 	}
 	c.Data = filtered

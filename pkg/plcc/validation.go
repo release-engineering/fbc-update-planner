@@ -274,7 +274,14 @@ func (c *Catalog) Validate(strict bool, validators ...CatalogValidator) CatalogR
 	if strict && len(rejections) > 0 {
 		var filtered []Product
 		for _, p := range c.Data {
-			if _, rejected := rejections[p.Package]; !rejected {
+			rejected := false
+			for _, pkg := range p.Packages() {
+				if _, found := rejections[pkg]; found {
+					rejected = true
+					break
+				}
+			}
+			if !rejected {
 				filtered = append(filtered, p)
 			}
 		}
@@ -621,8 +628,8 @@ func ValidateOCPFormat(p Product) []string {
 func ValidateNoDuplicates(products []Product) CatalogRejections {
 	pkgCount := make(map[string]int)
 	for _, p := range products {
-		if p.Package != "" {
-			pkgCount[p.Package]++
+		for _, pkg := range p.Packages() {
+			pkgCount[pkg]++
 		}
 	}
 	rejections := make(CatalogRejections)

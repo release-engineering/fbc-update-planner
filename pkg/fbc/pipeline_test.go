@@ -69,6 +69,17 @@ func TestTranslate(t *testing.T) {
 				},
 			}},
 		},
+		{
+			Name:    "Multi Package Product",
+			Package: "alpha-op,beta-op",
+			Versions: []plcc.Version{{
+				Name: "1.0",
+				Phases: []plcc.Phase{
+					{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+					{Name: "Maintenance", StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+				},
+			}},
+		},
 	}
 
 	valid, failures := Translate(products, DefaultFilters()...)
@@ -79,8 +90,8 @@ func TestTranslate(t *testing.T) {
 	if failures[0].PackageName != "bad-pkg" {
 		t.Errorf("failures[0] package = %q, want %q", failures[0].PackageName, "bad-pkg")
 	}
-	if len(valid) != 3 {
-		t.Fatalf("got %d valid packages, want 3", len(valid))
+	if len(valid) != 5 {
+		t.Fatalf("got %d valid packages, want 5", len(valid))
 	}
 	if valid[0].Name != "valid-pkg" {
 		t.Errorf("valid[0] package name = %q, want %q", valid[0].Name, "valid-pkg")
@@ -98,6 +109,12 @@ func TestTranslate(t *testing.T) {
 	}
 	if len(valid[2].Versions[0].Phases) != 1 {
 		t.Errorf("empty-dates-pkg: got %d phases, want 1 (GA should be stripped)", len(valid[2].Versions[0].Phases))
+	}
+	if valid[3].Name != "alpha-op" {
+		t.Errorf("valid[3] package name = %q, want %q", valid[3].Name, "alpha-op")
+	}
+	if valid[4].Name != "beta-op" {
+		t.Errorf("valid[4] package name = %q, want %q", valid[4].Name, "beta-op")
 	}
 }
 
