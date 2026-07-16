@@ -2,8 +2,6 @@
 
 `plcc2fbc` fetches operator lifecycle data from the Red Hat Product Life Cycle Center (PLCC) API, validates and filters PLCC data, and converts it into File-Based Catalog (FBC) blobs.
 
-**Download latest generated FBC file:** [fbc-latest.yaml](https://github.com/release-engineering/fbc-update-planner/raw/main/fbc-samples/fbc-latest.yaml)
-
 ## Build
 
 ```shell
@@ -38,13 +36,13 @@ bin/plcc2fbc [flags] <output-path>
 | 2 | No FBC data generated (all packages filtered out) |
 | 3 | Requested packages (`-p`) not found in PLCC data (without `--allow-missing`) |
 
-## Generate FBC snapshot
+## Generate lifecycle FBC fragments
 
 ```shell
 make generate-fbc
 ```
 
-Writes `fbc-samples/fbc-YYMMDD.yaml` and updates `fbc-samples/fbc-latest.yaml`.
+Builds the tool, runs it against the live PLCC API and writes output to the fbc-samples dir
 
 ## Documentation
 

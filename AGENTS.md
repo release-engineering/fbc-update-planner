@@ -36,9 +36,8 @@ pkg/report/result.go          Shared ValidationResult type + JSON-lines log writ
 docs/VALIDATION_RULES.md      Filter pipeline spec (read before touching filters)
 docs/FBC_SCHEMA.md            FBC output schema reference
 schema-examples/              Example PLCC + FBC schemas for reference
-fbc-samples/                  Generated FBC snapshots (YAML, logs, validation logs)
-scripts/plcc-check.sh            Batch runner — runs plcc2fbc against a list of operators, summarizes results
-scripts/top-operators             Default operator list for plcc-check.sh
+scripts/plcc-check.sh         Batch runner — runs plcc2fbc against a list of operators, summarizes results
+scripts/top-operators         Default operator list for plcc-check.sh
 .github/workflows/tests.yaml  CI workflow definition
 ```
 
@@ -160,7 +159,6 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - The CLI exits with code 1 for fatal errors, code 2 if no valid FBC blobs are produced, and code 3 if requested `-p` packages are not found (without `--allow-missing`) — all are intentional
 - `FilterIncompletePhases` mutates the package in place (drops phases) — it never rejects
 - All `.go` files must have the Apache 2.0 license header
-- `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
 - No `.golangci.yaml` — linter uses upstream defaults
 - Design choice: `newPackage()` delegates to `translateVersion()` which runs the converter registry (`DefaultConverters()`); any converter error (malformed version name, unparseable timestamps, invalid OCP format) rejects the entire package. The FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
 - Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`, `fbc.GenerateFBC` logOutput) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
