@@ -31,20 +31,25 @@ Arguments:
 Options:
   -o <dir>           Output directory for generated files (default: current directory)
   --plcc             Validate PLCC data only (skip FBC generation)
+  --fbc              Convert to FBC only (skip PLCC validation)
   -h                 Show this help
 
 Example usage:
 ./plcc-check.sh -o \$(date +%y%m%d) top-operators > summary.txt
 ./plcc-check.sh --plcc -o \$(date +%y%m%d) top-operators > summary.txt
+./plcc-check.sh --fbc -o \$(date +%y%m%d) top-operators > summary.txt
 EOF
 }
 
 outdir="."
 validate_only=false
+convert_only=false
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o) outdir="$2"; shift 2 ;;
         --plcc) validate_only=true; shift ;;
+        --fbc) convert_only=true; shift ;;
         -h) usage; exit 0 ;;
         -*) usage >&2; exit 1 ;;
         *) break ;;
@@ -101,6 +106,9 @@ plcc2fbc_args=(--allow-missing -o yaml -l "$val_out" -p "$pkg_list")
 if $validate_only; then
     plcc2fbc_args+=(--dump-plcc)
     echo "Running plcc2fbc with ${#operators[@]} operators (PLCC validation only)..."
+elif $convert_only; then
+    plcc2fbc_args+=(--validators "")
+    echo "Running plcc2fbc with ${#operators[@]} operators (FBC filtering only)..."
 else
     echo "Running plcc2fbc with ${#operators[@]} operators..."
 fi
