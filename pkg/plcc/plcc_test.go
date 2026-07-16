@@ -32,10 +32,12 @@ func TestPackages(t *testing.T) {
 		pkg     string
 		want    []string
 	}{
+		{"single name", "alpha", []string{"alpha"}},
 		{"simple pair", "alpha,beta", []string{"alpha", "beta"}},
 		{"trailing comma", "alpha,", []string{"alpha"}},
 		{"double comma", "alpha,,beta", []string{"alpha", "beta"}},
 		{"spaces trimmed", " alpha , beta ", []string{"alpha", "beta"}},
+		{"intra-product dedup", "alpha,alpha,beta", []string{"alpha", "beta"}},
 		{"only commas", ",", nil},
 		{"empty string", "", nil},
 	}

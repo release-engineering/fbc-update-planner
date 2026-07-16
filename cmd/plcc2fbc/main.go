@@ -198,6 +198,9 @@ func writeSplit(products []plcc.Product, dir string, writer fbc.PackageWriter, r
 		}
 	}
 
+	if count == 0 {
+		return 0, errNoFBCOutput
+	}
 	return count, nil
 }
 
@@ -298,14 +301,12 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict bool, re
 			filtered = append(filtered, product)
 			continue
 		}
-		for _, pkgName := range product.Packages() {
-			if err := report.LogResults(reportWriter, report.ValidationResult{
-				PackageName: pkgName,
-				Valid:       !strict,
-				Reasons:     warnings,
-			}); err != nil {
-				return nil, fmt.Errorf("writing validation report for %s: %w", pkgName, err)
-			}
+		if err := report.LogResults(reportWriter, report.ValidationResult{
+			PackageName: product.Package,
+			Valid:       !strict,
+			Reasons:     warnings,
+		}); err != nil {
+			return nil, fmt.Errorf("writing validation report for %s: %w", product.Package, err)
 		}
 		if !strict {
 			filtered = append(filtered, product)

@@ -56,19 +56,26 @@ type Product struct {
 	IsOperator     bool      `json:"is_operator"`
 }
 
-// Packages returns the trimmed, non-empty package names for this product. The
-// package field may contain a comma-separated list (e.g. "odf-operator,mcg-operator").
+// Packages returns the unique, trimmed, non-empty package names for this
+// product. The package field may contain a comma-separated list (e.g.
+// "odf-operator,mcg-operator"). Duplicate names within the list are collapsed.
 func (p Product) Packages() []string {
 	if p.Package == "" {
 		return nil
 	}
 	parts := strings.Split(p.Package, ",")
-	filtered := parts[:0]
+	seen := make(map[string]struct{}, len(parts))
+	var filtered []string
 	for _, s := range parts {
 		s = strings.TrimSpace(s)
-		if s != "" {
-			filtered = append(filtered, s)
+		if s == "" {
+			continue
 		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		filtered = append(filtered, s)
 	}
 	if len(filtered) == 0 {
 		return nil
@@ -160,7 +167,7 @@ func Load(path string) (*Catalog, error) {
 func (c *Catalog) FilterPackages() {
 	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
-		if p.Package != "" {
+		if len(p.Packages()) > 0 {
 			filtered = append(filtered, p)
 		}
 	}
@@ -181,21 +188,15 @@ func (c *Catalog) FilterByPackageNames(names []string) error {
 	found := make(map[string]bool, len(names))
 	filtered := make([]Product, 0, len(names))
 	for i := range c.Data {
-		matched := false
+		var matchedNames []string
 		for _, pkg := range c.Data[i].Packages() {
 			if allowed[pkg] {
 				found[pkg] = true
-				matched = true
+				matchedNames = append(matchedNames, pkg)
 			}
 		}
-		if matched {
+		if len(matchedNames) > 0 {
 			p := c.Data[i]
-			var matchedNames []string
-			for _, pkg := range p.Packages() {
-				if allowed[pkg] {
-					matchedNames = append(matchedNames, pkg)
-				}
-			}
 			p.Package = strings.Join(matchedNames, ",")
 			filtered = append(filtered, p)
 		}
