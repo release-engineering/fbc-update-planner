@@ -127,7 +127,7 @@ func TestRun(t *testing.T) {
 			wantPkgNotFound: true,
 		},
 		{
-			name:            "allow-missing without permissive still errors on partial match",
+			name:            "allow-missing with all packages missing still fails with no output",
 			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent", "--allow-missing", t.TempDir() + "/out.json"},
 			wantNotFound:    true,
 		},
@@ -254,6 +254,21 @@ func TestRunSuccess(t *testing.T) {
 				content := string(data)
 				if !strings.Contains(content, "rhacs-operator") {
 					t.Error("output should contain rhacs-operator")
+				}
+			},
+		},
+		{
+			name: "allow-missing without permissive partial match",
+			args: func(out string) []string {
+				return []string{"plcc2fbc", "-i", testdataInput, "-p", "odr-cluster-operator,nonexistent", "--allow-missing", out}
+			},
+			checks: func(t *testing.T, outFile string) {
+				data, err := os.ReadFile(outFile)
+				if err != nil {
+					t.Fatalf("reading output: %v", err)
+				}
+				if !strings.Contains(string(data), "odr-cluster-operator") {
+					t.Error("output should contain odr-cluster-operator")
 				}
 			},
 		},

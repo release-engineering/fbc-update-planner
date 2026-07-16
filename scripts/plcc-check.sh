@@ -74,7 +74,8 @@ mkdir -p "$outdir"
 operators=()
 while IFS= read -r line; do
     line="${line%%#*}"
-    line="$(echo "$line" | xargs)"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
     [[ -z "$line" ]] && continue
     operators+=("$line")
 done < "$operators_file"
@@ -122,7 +123,7 @@ fi
 missing=()
 while IFS= read -r name; do
     [[ -n "$name" ]] && missing+=("$name")
-done < <(jq -r 'select(.msg == "requested package not found in PLCC data") | .package' "$log_out" 2>/dev/null)
+done < <(jq -r 'select(.level == "WARN" and .msg == "requested package not found in PLCC data") | .package' "$log_out" 2>/dev/null)
 
 # Operators with validation issues: stderr JSONL entries with valid=false.
 issues_json="$(jq -s '[.[] | select((.reasons | length) > 0)]' "$val_out" 2>/dev/null || echo '[]')"
@@ -162,13 +163,17 @@ echo ""
 echo "=== Requested operators ==="
 for name in "${operators[@]}"; do
     is_missing=false
-    for m in "${missing[@]}"; do
-        [[ "$m" == "$name" ]] && is_missing=true && break
-    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        for m in "${missing[@]}"; do
+            [[ "$m" == "$name" ]] && is_missing=true && break
+        done
+    fi
     has_issues=false
-    for m in "${issue_names[@]}"; do
-        [[ "$m" == "$name" ]] && has_issues=true && break
-    done
+    if [[ ${#issue_names[@]} -gt 0 ]]; then
+        for m in "${issue_names[@]}"; do
+            [[ "$m" == "$name" ]] && has_issues=true && break
+        done
+    fi
 
     if $is_missing; then
         printf "  ✗  %-${max_len}s  [NOT FOUND]\n" "$name"
