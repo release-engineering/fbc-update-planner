@@ -184,6 +184,11 @@ func resolveLabels(names []string) (map[string]bool, error) {
 	labels := make(map[string]bool)
 	for _, name := range names {
 		switch name {
+		case "none":
+			if len(names) > 1 {
+				return nil, fmt.Errorf("%q cannot be combined with other validators", name)
+			}
+			return labels, nil
 		case "all":
 			for _, e := range validatorRegistry {
 				labels[e.Label] = true
@@ -234,6 +239,7 @@ func ListValidators() string {
 	var b strings.Builder
 	b.WriteString("Groups:\n")
 	b.WriteString("  all        all validators (syntax + semantic + catalog)\n")
+	b.WriteString("  none       skip all validation\n")
 	b.WriteString("  syntax     data format and structure checks\n")
 	b.WriteString("  semantic   business/lifecycle rule checks\n")
 	b.WriteString("  catalog    cross-product catalog checks\n")

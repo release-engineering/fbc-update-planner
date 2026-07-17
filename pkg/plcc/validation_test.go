@@ -89,6 +89,9 @@ func TestLookupValidators(t *testing.T) {
 		wantCat    bool
 		wantErr    bool
 	}{
+		{"none returns empty", []string{"none"}, false, false, false},
+		{"none with others errors", []string{"none", "syntax"}, false, false, true},
+		{"others with none errors", []string{"syntax", "none"}, false, false, true},
 		{"all returns both", []string{"all"}, true, true, false},
 		{"syntax returns prod only", []string{"syntax"}, true, false, false},
 		{"semantic returns prod only", []string{"semantic"}, true, false, false},

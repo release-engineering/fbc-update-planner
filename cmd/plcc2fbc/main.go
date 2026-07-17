@@ -71,7 +71,7 @@ func run() (err error) {
 	flag.BoolVar(&dumpPLCC, "dump-plcc", false, "dump filtered PLCC JSON instead of generating FBC")
 	flag.BoolVar(&permissive, "permissive", false, "keep packages that fail PLCC validation instead of filtering them out")
 	flag.BoolVar(&allowMissing, "allow-missing", false, "warn about missing -p packages instead of aborting")
-	flag.StringVar(&validatorsFlag, "validators", "all", "comma-separated list of validators to run (labels, groups: all, syntax, semantic, catalog)")
+	flag.StringVar(&validatorsFlag, "validators", "all", "comma-separated list of validators to run (labels, groups: all, none, syntax, semantic, catalog)")
 	flag.BoolVar(&listValidators, "list-validators", false, "list available validators and exit")
 	flag.BoolVar(&split, "split", false, "write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory")
 	flag.Usage = func() {
@@ -262,6 +262,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	if err != nil {
 		return nil, fmt.Errorf("invalid --validators flag: %w", err)
 	}
+	slog.Info("resolved validators", "product", len(validators), "catalog", len(catalogValidators))
 
 	if packages != "" {
 		var names []string
