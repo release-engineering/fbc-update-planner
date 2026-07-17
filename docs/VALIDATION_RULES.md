@@ -20,7 +20,7 @@ After PLCC data is fetched, each product passes through four stages:
 | Condition | Stage | Effect |
 |---|---|---|
 | Product has no package name | PLCC filtering | Silently skipped |
-| Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--permissive` warning only |
+| Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--allow-missing` warning only |
 | Package name appears in multiple products | PLCC catalog validation | All products containing the duplicated name removed (comma-separated names are expanded); with `--permissive` warning only |
 | Invalid version name, timestamp, or OCP format | FBC converter pipeline | Entire package rejected |
 | Phase with nil start or end date | FBC filter pipeline | Phase silently removed |
@@ -121,7 +121,7 @@ Converters **validate and translate** one field of a PLCC version into the corre
 | 2 | `ConvertPhases` | FBC-PHASE-01 | Translate phase timestamps to FBC dates |
 | 3 | `ConvertOCPCompatibility` | FBC-OCP-01 | Parse OCP compatibility versions as MAJOR.MINOR |
 
-`DefaultConverters()` returns all converters from the registry in order. `translateVersion()` iterates them to build each `fbc.Version`.
+`translateVersion()` iterates `converterRegistry` directly to build each `fbc.Version`.
 
 ---
 

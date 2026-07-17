@@ -17,10 +17,10 @@ limitations under the License.
 // Package fbc translates PLCC product lifecycle data into File-Based Catalog (FBC)
 // entries using the io.openshift.operators.lifecycles.v1alpha1 schema.
 //
-// Translation proceeds in two phases: a converter pipeline ([DefaultConverters])
-// validates and translates each plcc.Version field into the corresponding
-// fbc.Version field, then a filter pipeline ([DefaultFilters]) cleans the output
-// (e.g., dropping incomplete phases).
+// Translation proceeds in two phases: a converter pipeline validates and
+// translates each plcc.Version field into the corresponding fbc.Version field,
+// then a filter pipeline ([DefaultFilters]) cleans the output (e.g., dropping
+// incomplete phases).
 //
 // [TranslateProduct] converts a single PLCC product through both phases.
 // [Translate] applies [TranslateProduct] to a batch of products.

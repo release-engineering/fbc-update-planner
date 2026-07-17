@@ -39,15 +39,6 @@ var converterRegistry = []converterEntry{
 	{"FBC-OCP-01", "converter", []Converter{ConvertOCPCompatibility}},
 }
 
-// DefaultConverters returns the standard set of version converters.
-func DefaultConverters() []Converter {
-	var result []Converter
-	for _, entry := range converterRegistry {
-		result = append(result, entry.Converters...)
-	}
-	return result
-}
-
 // ConvertVersionName parses the version name as MAJOR.MINOR and sets dst.Name.
 // FBC-VER-01
 func ConvertVersionName(src plcc.Version, dst *Version) []error {

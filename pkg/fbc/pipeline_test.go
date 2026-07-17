@@ -70,7 +70,18 @@ func TestTranslate(t *testing.T) {
 		},
 		{
 			Name:    "Multi Package Product",
-			Package: "alpha-op,beta-op",
+			Package: "alpha-op",
+			Versions: []plcc.Version{{
+				Name: "1.0",
+				Phases: []plcc.Phase{
+					{Name: "Full support", StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z"},
+					{Name: "Maintenance", StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
+				},
+			}},
+		},
+		{
+			Name:    "Multi Package Product",
+			Package: "beta-op",
 			Versions: []plcc.Version{{
 				Name: "1.0",
 				Phases: []plcc.Phase{
@@ -209,6 +220,7 @@ func TestReferenceFile(t *testing.T) {
 	}
 
 	catalog.DropWithoutPackageName()
+	catalog.ExpandPackages()
 	catalog.SortByPackage()
 
 	var buf bytes.Buffer
@@ -238,6 +250,7 @@ func TestReferenceFileJSONPretty(t *testing.T) {
 	}
 
 	catalog.DropWithoutPackageName()
+	catalog.ExpandPackages()
 	catalog.SortByPackage()
 
 	var buf bytes.Buffer
@@ -267,6 +280,7 @@ func TestReferenceFileJSON(t *testing.T) {
 	}
 
 	catalog.DropWithoutPackageName()
+	catalog.ExpandPackages()
 	catalog.SortByPackage()
 
 	var buf bytes.Buffer

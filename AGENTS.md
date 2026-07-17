@@ -79,11 +79,13 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
   → catalog.SortByPackage()           # alphabetical
   → catalog.Validate()                # catalog-level PLCC validators (cross-product checks)
   → plcc.ValidateProduct()            # per-product PLCC validators (filter out failures; --permissive keeps them)
+  → catalog.ExpandPackages()          # split comma-separated package names into separate products
+  → catalog.SortByPackage()           # re-sort expanded products
   → writeFBC()                        # single-file mode (default):
       → fbc.Translate()              # batch translate all products, collect valid + failures
       → writer.Write()               # write all valid packages at once
   → writeSplitFBC()                  # --split mode:
-      → fbc.TranslateProduct()       # per product per package name: convert + filter (fail-fast)
+      → fbc.TranslateProduct()       # per product: convert + filter (fail-fast)
       → writer.Write()               # write each package to <dir>/<package>/lifecycle.{json,yaml}
 
 With --dump-plcc:
@@ -161,6 +163,6 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - `FilterIncompletePhases` mutates the package in place (drops phases) — it never rejects
 - All `.go` files must have the Apache 2.0 license header
 - No `.golangci.yaml` — linter uses upstream defaults
-- Design choice: `newPackage()` delegates to `translateVersion()` which runs the converter registry (`DefaultConverters()`); any converter error (malformed version name, unparseable timestamps, invalid OCP format) rejects the entire package. The FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
+- Design choice: `newPackage()` delegates to `translateVersion()` which iterates `converterRegistry` directly; any converter error (malformed version name, unparseable timestamps, invalid OCP format) rejects the entire package. The FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
 - Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used

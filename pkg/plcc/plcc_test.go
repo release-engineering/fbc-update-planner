@@ -119,6 +119,27 @@ func TestDropWithoutPackageName(t *testing.T) {
 	}
 }
 
+func TestExpandPackages(t *testing.T) {
+	c := &Catalog{Data: []Product{
+		{Name: "Single", Package: "pkg-a"},
+		{Name: "Multi", Package: "beta-op,alpha-op"},
+		{Name: "Empty", Package: ""},
+	}}
+	c.ExpandPackages()
+	if len(c.Data) != 4 {
+		t.Fatalf("got %d products, want 4", len(c.Data))
+	}
+	want := []string{"pkg-a", "beta-op", "alpha-op", ""}
+	for i, w := range want {
+		if c.Data[i].Package != w {
+			t.Errorf("Data[%d].Package = %q, want %q", i, c.Data[i].Package, w)
+		}
+	}
+	if c.Data[1].Name != "Multi" || c.Data[2].Name != "Multi" {
+		t.Errorf("expanded products should preserve Name: got %q, %q", c.Data[1].Name, c.Data[2].Name)
+	}
+}
+
 func TestDumpLoadRoundTrip(t *testing.T) {
 	original := &Catalog{Data: []Product{
 		{

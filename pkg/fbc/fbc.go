@@ -86,22 +86,20 @@ func TranslateProduct(product plcc.Product, filters ...Filter) (*Package, *repor
 // phases) or reject them. Returns the valid packages and a list of rejections.
 // Unlike the CLI's --split mode, Translate always processes all products and
 // collects failures rather than aborting on the first one.
+// Each product must have a single package name; call Catalog.ExpandPackages
+// first if products may have comma-separated names.
 // Callers should run Catalog.Validate before calling Translate for cross-product
 // checks such as duplicate package detection.
 func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report.ValidationResult) {
 	var failures []report.ValidationResult
 	validPackages := make([]*Package, 0, len(products))
 	for _, product := range products {
-		for _, pkgName := range product.Packages() {
-			single := product
-			single.Package = pkgName
-			pkg, failure := TranslateProduct(single, filters...)
-			if failure != nil {
-				failures = append(failures, *failure)
-				continue
-			}
-			validPackages = append(validPackages, pkg)
+		pkg, failure := TranslateProduct(product, filters...)
+		if failure != nil {
+			failures = append(failures, *failure)
+			continue
 		}
+		validPackages = append(validPackages, pkg)
 	}
 	return validPackages, failures
 }

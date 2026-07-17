@@ -191,10 +191,4 @@ func TestConvertOCPCompatibility(t *testing.T) {
 	}
 }
 
-func TestDefaultConverters(t *testing.T) {
-	converters := DefaultConverters()
-	if len(converters) != 3 {
-		t.Errorf("got %d converters, want 3", len(converters))
-	}
-}
 

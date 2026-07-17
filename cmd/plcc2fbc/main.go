@@ -146,6 +146,9 @@ func run() (err error) {
 		return nil
 	}
 
+	catalog.ExpandPackages()
+	catalog.SortByPackage()
+
 	var count int
 	if split {
 		count, err = writeSplitFBC(catalog.Data, writePath, writer, reportWriter)
@@ -192,33 +195,24 @@ func writeSplitFBC(products []plcc.Product, dir string, writer fbc.PackageWriter
 	}
 
 	filters := fbc.DefaultFilters()
-	count := 0
 
-	for _, product := range products {
-		for _, pkgName := range product.Packages() {
-			if !fs.ValidPath(pkgName) {
-				return 0, fmt.Errorf("unsafe package name %q: would escape output directory", pkgName)
+	for i, product := range products {
+		if !fs.ValidPath(product.Package) {
+			return i, fmt.Errorf("unsafe package name %q: would escape output directory", product.Package)
+		}
+		pkg, failure := fbc.TranslateProduct(product, filters...)
+		if failure != nil {
+			if err := report.LogResults(reportWriter, *failure); err != nil {
+				return i, err
 			}
-			single := product
-			single.Package = pkgName
-			pkg, failure := fbc.TranslateProduct(single, filters...)
-			if failure != nil {
-				if err := report.LogResults(reportWriter, *failure); err != nil {
-					return 0, err
-				}
-				return 0, fmt.Errorf("package %s failed FBC translation", pkgName)
-			}
-			if err := writePackageToDir(dir, pkgName, writer, pkg); err != nil {
-				return 0, err
-			}
-			count++
+			return i, fmt.Errorf("package %s failed FBC translation", product.Package)
+		}
+		if err := writePackageToDir(dir, product.Package, writer, pkg); err != nil {
+			return i, err
 		}
 	}
 
-	if count == 0 {
-		return 0, errNoFBCOutput
-	}
-	return count, nil
+	return len(products), nil
 }
 
 func writePackageToDir(dir, pkgName string, writer fbc.PackageWriter, pkg *fbc.Package) error {
