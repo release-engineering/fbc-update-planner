@@ -37,6 +37,8 @@ docs/VALIDATION_RULES.md      Filter pipeline spec (read before touching filters
 docs/FBC_SCHEMA.md            FBC output schema reference
 schema-examples/              Example PLCC + FBC schemas for reference
 fbc-samples/                  Generated FBC snapshots (YAML, logs, validation logs)
+scripts/plcc-check.sh            Batch runner — runs plcc2fbc against a list of operators, summarizes results
+scripts/top-operators             Default operator list for plcc-check.sh
 .github/workflows/tests.yaml  CI workflow definition
 ```
 
@@ -61,6 +63,7 @@ plcc2fbc [flags] <output-path>
 -i, --input         Read PLCC JSON from a file instead of fetching from API
     --dump-plcc     Dump filtered PLCC JSON instead of generating FBC
     --permissive    Keep packages that fail PLCC validation instead of filtering them out
+    --allow-missing Warn about missing -p packages instead of aborting
     --validators    Comma-separated validators to run: labels, or groups all/syntax/semantic/catalog (default: all)
     --list-validators  List available validators and exit
     --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory
@@ -72,7 +75,7 @@ plcc2fbc [flags] <output-path>
 
 ```
 PLCC API (or -i file) → plcc.Fetch()/Load()
-  → catalog.FilterByPackageNames()  # if -p flag set; returns PackagesNotFoundError on missing packages
+  → catalog.FilterByPackageNames()  # if -p flag set; returns PackagesNotFoundError on missing packages (--allow-missing downgrades to warning)
   → catalog.FilterPackages()        # otherwise: drop products without package names
   → catalog.SortByPackage()         # alphabetical
   → catalog.Validate()              # catalog-level PLCC validators (cross-product checks)
@@ -154,7 +157,7 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 ## Gotchas
 
-- The CLI exits with code 1 for fatal errors, code 2 if no valid FBC blobs are produced, and code 3 if requested `-p` packages are not found (without `--permissive`) — all are intentional
+- The CLI exits with code 1 for fatal errors, code 2 if no valid FBC blobs are produced, and code 3 if requested `-p` packages are not found (without `--allow-missing`) — all are intentional
 - `FilterIncompletePhases` mutates the package in place (drops phases) — it never rejects
 - All `.go` files must have the Apache 2.0 license header
 - `fbc-samples/` contains committed generated files — update via `make generate-fbc`, not by hand
