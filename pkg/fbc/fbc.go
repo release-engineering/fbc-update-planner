@@ -116,9 +116,7 @@ func newPackage(product plcc.Product) (*Package, []error) {
 	for _, v := range product.Versions {
 		fv, verErrs := translateVersion(v)
 		if len(verErrs) > 0 {
-			for _, e := range verErrs {
-				errs = append(errs, fmt.Errorf("version %q: %w", v.Name, e))
-			}
+			errs = append(errs, verErrs...)
 			continue
 		}
 		pkg.Versions = append(pkg.Versions, *fv)
@@ -137,8 +135,12 @@ func newPackage(product plcc.Product) (*Package, []error) {
 func translateVersion(v plcc.Version) (*Version, []error) {
 	dst := &Version{}
 	var errs []error
-	for _, conv := range DefaultConverters() {
-		errs = append(errs, conv(v, dst)...)
+	for _, entry := range converterRegistry {
+		for _, conv := range entry.Converters {
+			for _, e := range conv(v, dst) {
+				errs = append(errs, fmt.Errorf("%s: version %q: %w", entry.Label, v.Name, e))
+			}
+		}
 	}
 	if len(errs) > 0 {
 		return nil, errs

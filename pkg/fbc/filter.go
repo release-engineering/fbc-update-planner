@@ -87,7 +87,7 @@ func ValidateVersionsHavePhases(p *Package) []string {
 	var reasons []string
 	for _, v := range p.Versions {
 		if len(v.Phases) == 0 {
-			reasons = append(reasons, fmt.Sprintf("FBC-VAL-02: version %s has no phases", v.Name))
+			reasons = append(reasons, fmt.Sprintf("FBC-VAL-02: version %q: has no phases", v.Name))
 		}
 	}
 	return reasons
@@ -100,10 +100,10 @@ func ValidatePhaseDates(p *Package) []string {
 	for _, v := range p.Versions {
 		for _, ph := range v.Phases {
 			if ph.StartDate == nil {
-				reasons = append(reasons, fmt.Sprintf("FBC-VAL-03: version %s phase %q has nil start date", v.Name, ph.Name))
+				reasons = append(reasons, fmt.Sprintf("FBC-VAL-03: version %q phase %q: has nil start date", v.Name, ph.Name))
 			}
 			if ph.EndDate == nil {
-				reasons = append(reasons, fmt.Sprintf("FBC-VAL-03: version %s phase %q has nil end date", v.Name, ph.Name))
+				reasons = append(reasons, fmt.Sprintf("FBC-VAL-03: version %q phase %q: has nil end date", v.Name, ph.Name))
 			}
 		}
 	}
@@ -122,7 +122,7 @@ func ValidateDateOrdering(p *Package) []string {
 			}
 			if ph.StartDate.Compare(*ph.EndDate) > 0 {
 				reasons = append(reasons, fmt.Sprintf(
-					"FBC-VAL-04: version %s phase %q start date %s is after end date %s",
+					"FBC-VAL-04: version %q phase %q: start date %s is after end date %s",
 					v.Name, ph.Name, ph.StartDate, ph.EndDate,
 				))
 			}
@@ -147,7 +147,7 @@ func ValidatePhaseContiguity(p *Package) []string {
 			}
 			if cur.EndDate.NextDay().Compare(*next.StartDate) != 0 {
 				reasons = append(reasons, fmt.Sprintf(
-					"FBC-VAL-05: version %s: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",
+					"FBC-VAL-05: version %q: gap or overlap between phase %q (ends %s) and phase %q (starts %s)",
 					v.Name, cur.Name, cur.EndDate, next.Name, next.StartDate,
 				))
 			}
