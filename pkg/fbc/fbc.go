@@ -18,7 +18,6 @@ package fbc
 
 import (
 	"fmt"
-	"io"
 	"slices"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
@@ -55,26 +54,6 @@ type Platform struct {
 	Versions []MajorMinor `json:"versions"`
 }
 
-// GenerateFBC converts PLCC products to FBC data, writing valid packages to output
-// using the provided PackageWriter and validation failures as JSON to logOutput.
-// Returns the number of valid packages emitted.
-func GenerateFBC(products []plcc.Product, output io.Writer, logOutput io.Writer, writer PackageWriter) (int, error) {
-	if writer == nil {
-		return 0, fmt.Errorf("PackageWriter must not be nil")
-	}
-
-	valid, failures := Translate(products, DefaultFilters()...)
-
-	if err := report.LogResults(logOutput, failures...); err != nil {
-		return 0, err
-	}
-
-	if err := writer.Write(output, valid...); err != nil {
-		return 0, fmt.Errorf("failed to write packages: %w", err)
-	}
-	return len(valid), nil
-}
-
 // TranslateProduct converts a single PLCC product to an FBC package, running
 // it through the provided filter pipeline. Returns the package on success, or
 // nil and a ValidationResult on failure.
@@ -105,6 +84,8 @@ func TranslateProduct(product plcc.Product, filters ...Filter) (*Package, *repor
 // Translate converts PLCC products to FBC packages, running each through the
 // provided filter pipeline. Filters may mutate packages (e.g., drop incomplete
 // phases) or reject them. Returns the valid packages and a list of rejections.
+// Unlike the CLI's --split mode, Translate always processes all products and
+// collects failures rather than aborting on the first one.
 // Callers should run Catalog.Validate before calling Translate for cross-product
 // checks such as duplicate package detection.
 func Translate(products []plcc.Product, filters ...Filter) ([]*Package, []report.ValidationResult) {

@@ -23,8 +23,7 @@ limitations under the License.
 // (e.g., dropping incomplete phases).
 //
 // [TranslateProduct] converts a single PLCC product through both phases.
-// [Translate] applies [TranslateProduct] to a batch of products. [GenerateFBC]
-// is a convenience wrapper that combines translation with I/O handling.
+// [Translate] applies [TranslateProduct] to a batch of products.
 // A [PackageWriter] serializes packages to a given format; use [NewPackageWriter]
 // to obtain one.
 package fbc

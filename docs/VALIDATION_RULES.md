@@ -8,7 +8,7 @@ This document describes the rules that `plcc2fbc` uses to validate data from the
 
 After PLCC data is fetched, each product passes through four stages:
 
-1. **PLCC filtering** (`pkg/plcc/plcc.go`): basic structural filtering before any validation runs. Drops products with no `package` name (`FilterPackages`). When `-p` is specified, keeps only the requested packages (`FilterByPackageNames`) and returns an error for any names not found.
+1. **PLCC filtering** (`pkg/plcc/plcc.go`): basic structural filtering before any validation runs. Drops products with no `package` name (`DropWithoutPackageName`). When `-p` is specified, keeps only the requested packages (`FilterByPackageNames`) and returns an error for any names not found.
 2. **[PLCC-level validation](#plcc-level-validation)** (`pkg/plcc/validation.go`): validators that check raw PLCC data quality (tier, release cadence, phase completeness, dates, duplicates). Organized into three groups: `syntax`, `semantic`, and `catalog`. By default these **filter out** failing packages; with `--permissive` they produce warnings only. Use `--validators` to select which validators to run (by label or group: `all`, `syntax`, `semantic`, `catalog`).
 3. **[FBC Converter Pipeline](#fbc-converter-pipeline)** (`pkg/fbc/conversion.go`): type-checked field translation from `plcc.Version` to `fbc.Version`. Each converter validates one field and populates the corresponding output. Organized in `converterRegistry`. Always run — cannot be disabled.
 4. **[FBC Filter Pipeline](#fbc-filter-pipeline)** (`pkg/fbc/filter.go`): an ordered sequence of `Filter` callbacks that clean the translated FBC output (e.g., drop incomplete phases). Organized in `filterRegistry`.

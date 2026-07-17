@@ -104,13 +104,13 @@ func TestFormatDate(t *testing.T) {
 }
 
 
-func TestFilterPackages(t *testing.T) {
+func TestDropWithoutPackageName(t *testing.T) {
 	c := &Catalog{Data: []Product{
 		{Name: "A", Package: "pkg-a"},
 		{Name: "B", Package: ""},
 		{Name: "C", Package: "pkg-c"},
 	}}
-	c.FilterPackages()
+	c.DropWithoutPackageName()
 	if len(c.Data) != 2 {
 		t.Fatalf("got %d products, want 2", len(c.Data))
 	}

@@ -163,8 +163,8 @@ func Load(path string) (*Catalog, error) {
 	return &catalog, nil
 }
 
-// FilterPackages removes products that have no package name, modifying the catalog in place.
-func (c *Catalog) FilterPackages() {
+// DropWithoutPackageName removes products that have no package name, modifying the catalog in place.
+func (c *Catalog) DropWithoutPackageName() {
 	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
 		if len(p.Packages()) > 0 {

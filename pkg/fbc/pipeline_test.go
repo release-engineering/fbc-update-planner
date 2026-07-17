@@ -18,7 +18,6 @@ package fbc
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"strings"
 	"testing"
@@ -209,12 +208,13 @@ func TestReferenceFile(t *testing.T) {
 		t.Fatalf("loading PLCC test data: %v", err)
 	}
 
-	catalog.FilterPackages()
+	catalog.DropWithoutPackageName()
 	catalog.SortByPackage()
 
 	var buf bytes.Buffer
-	if _, err := GenerateFBC(catalog.Data, &buf, io.Discard, YAMLWriter{}); err != nil {
-		t.Fatalf("generating FBC: %v", err)
+	valid, _ := Translate(catalog.Data, DefaultFilters()...)
+	if err := (YAMLWriter{}).Write(&buf, valid...); err != nil {
+		t.Fatalf("writing FBC: %v", err)
 	}
 
 	want, err := os.ReadFile("testdata/reference-fbc.yaml")
@@ -237,12 +237,13 @@ func TestReferenceFileJSONPretty(t *testing.T) {
 		t.Fatalf("loading PLCC test data: %v", err)
 	}
 
-	catalog.FilterPackages()
+	catalog.DropWithoutPackageName()
 	catalog.SortByPackage()
 
 	var buf bytes.Buffer
-	if _, err := GenerateFBC(catalog.Data, &buf, io.Discard, JSONPrettyWriter{}); err != nil {
-		t.Fatalf("generating FBC: %v", err)
+	valid, _ := Translate(catalog.Data, DefaultFilters()...)
+	if err := (JSONPrettyWriter{}).Write(&buf, valid...); err != nil {
+		t.Fatalf("writing FBC: %v", err)
 	}
 
 	want, err := os.ReadFile("testdata/reference-fbc-pretty.json")
@@ -265,12 +266,13 @@ func TestReferenceFileJSON(t *testing.T) {
 		t.Fatalf("loading PLCC test data: %v", err)
 	}
 
-	catalog.FilterPackages()
+	catalog.DropWithoutPackageName()
 	catalog.SortByPackage()
 
 	var buf bytes.Buffer
-	if _, err := GenerateFBC(catalog.Data, &buf, io.Discard, JSONWriter{}); err != nil {
-		t.Fatalf("generating FBC: %v", err)
+	valid, _ := Translate(catalog.Data, DefaultFilters()...)
+	if err := (JSONWriter{}).Write(&buf, valid...); err != nil {
+		t.Fatalf("writing FBC: %v", err)
 	}
 
 	want, err := os.ReadFile("testdata/reference-fbc.json")
