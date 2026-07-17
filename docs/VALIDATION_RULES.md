@@ -83,8 +83,8 @@ Universal invariants that always apply regardless of version age: `ValidateDates
 
 **How OCP context is injected:**
 
-- `LookupValidators(deps, ...)` calls `initPlatformAlignedPhases(deps)` for the REQ-TIER-PA-01 entry, which creates an OCP-aware closure via `ValidatePlatformAlignedPhases(ocpProduct)`.
-- The OCP product is extracted from the full PLCC catalog *before* package-name filtering (since OCP itself is not an operator package and would be filtered out).
+- `catalog.LookupValidators(...)` calls `initPlatformAlignedPhases(c)` for the REQ-TIER-PA-01 entry, which looks up the OCP product via `c.FindProductByName(OCPProductName)` and creates an OCP-aware closure via `ValidatePlatformAlignedPhases(ocp)`.
+- `LookupValidators` must be called on the full catalog *before* package-name filtering (since OCP itself is not an operator package and would be filtered out).
 
 **Example:**
 

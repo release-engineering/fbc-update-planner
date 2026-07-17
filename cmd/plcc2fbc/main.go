@@ -250,7 +250,19 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	}
 
 	slog.Info("fetched products from PLCC", "count", catalog.Len())
-	ocpProduct := catalog.FindProductByName(plcc.OCPProductName)
+
+	var validatorNames []string
+	for _, name := range strings.Split(validatorsFlag, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			validatorNames = append(validatorNames, name)
+		}
+	}
+	validators, catalogValidators, err := catalog.LookupValidators(validatorNames...)
+	if err != nil {
+		return nil, fmt.Errorf("invalid --validators flag: %w", err)
+	}
+
 	if packages != "" {
 		var names []string
 		for _, name := range strings.Split(packages, ",") {
@@ -276,19 +288,6 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	}
 	slog.Info("filtered packages", "count", catalog.Len())
 	catalog.SortByPackage()
-
-	var validatorNames []string
-	for _, name := range strings.Split(validatorsFlag, ",") {
-		name = strings.TrimSpace(name)
-		if name != "" {
-			validatorNames = append(validatorNames, name)
-		}
-	}
-	deps := &plcc.ValidatorDeps{OCPProduct: ocpProduct}
-	validators, catalogValidators, err := plcc.LookupValidators(deps, validatorNames...)
-	if err != nil {
-		return nil, fmt.Errorf("invalid --validators flag: %w", err)
-	}
 
 	if len(catalogValidators) > 0 {
 		before := catalog.Len()
