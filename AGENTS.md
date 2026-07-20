@@ -33,6 +33,8 @@ pkg/fbc/writer_test.go        Tests for writers
 pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference output
 pkg/fbc/testdata/             Test fixtures (plcc.json, reference-fbc.yaml, etc.)
 pkg/report/result.go          Shared ValidationResult type + JSON-lines log writer
+test/e2e/e2e_test.go          End-to-end tests — build binary, run against fixture, compare output
+test/e2e/testdata/            E2e test fixtures (plcc.json, reference YAMLs, untranslatable.json)
 docs/VALIDATION_RULES.md      Filter pipeline spec (read before touching filters)
 docs/FBC_SCHEMA.md            FBC output schema reference
 schema-examples/              Example PLCC + FBC schemas for reference
@@ -44,9 +46,12 @@ scripts/top-operators         Default operator list for plcc-check.sh
 ## Commands
 
 ```sh
-make build          # → bin/plcc2fbc
-make test           # go test -v -count 1 ./...
-make generate-fbc   # build + run against live PLCC API, write YAML + logs to fbc-samples/
+make build              # → bin/plcc2fbc
+make test               # go test -v -count 1 ./...
+make e2e                # go test -v -count 1 ./test/e2e/
+make update-e2e         # regenerate e2e reference files from existing testdata/plcc.json
+make update-e2e-source  # fetch fresh plcc.json from PLCC API + regenerate references
+make generate-fbc       # build + run against live PLCC API, write YAML + logs to fbc-samples/
 ```
 
 No separate lint command — CI runs `golangci-lint` with defaults (no `.golangci.yaml`).
