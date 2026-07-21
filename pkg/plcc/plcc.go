@@ -163,8 +163,8 @@ func Load(path string) (*Catalog, error) {
 	return &catalog, nil
 }
 
-// FilterPackages removes products that have no package name, modifying the catalog in place.
-func (c *Catalog) FilterPackages() {
+// DropWithoutPackageName removes products that have no package name, modifying the catalog in place.
+func (c *Catalog) DropWithoutPackageName() {
 	filtered := make([]Product, 0, len(c.Data))
 	for _, p := range c.Data {
 		if len(p.Packages()) > 0 {
@@ -172,6 +172,30 @@ func (c *Catalog) FilterPackages() {
 		}
 	}
 	c.Data = filtered
+}
+
+// ExpandPackages splits products with comma-separated package names into
+// separate Product entries, one per package name. Products with a single
+// package name are unchanged. Call this after validation to preserve original
+// product shape in validation logs and --dump-plcc output.
+func (c *Catalog) ExpandPackages() {
+	var expanded []Product
+	for _, p := range c.Data {
+		names := p.Packages()
+		if len(names) <= 1 {
+			if len(names) == 1 {
+				p.Package = names[0]
+			}
+			expanded = append(expanded, p)
+			continue
+		}
+		for _, name := range names {
+			clone := p
+			clone.Package = name
+			expanded = append(expanded, clone)
+		}
+	}
+	c.Data = expanded
 }
 
 // FilterByPackageNames keeps only products where at least one expanded package name

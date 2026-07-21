@@ -104,16 +104,11 @@ func catalogValidatorsByGroup(group string) []CatalogValidator {
 	return result
 }
 
-// ValidatorDeps holds runtime dependencies for validators that need them.
-type ValidatorDeps struct {
-	OCPProduct *Product
-}
-
 type validatorEntry struct {
 	Label      string
 	Group      string // "syntax" or "semantic"
 	Validators []Validator
-	Init       func(*ValidatorDeps) []Validator
+	Init       func(*Catalog) ([]Validator, error)
 }
 
 type catalogValidatorEntry struct {
@@ -153,9 +148,10 @@ var catalogValidatorRegistry = []catalogValidatorEntry{
 // and catalog validators.
 // Accepted group names: "all", "syntax", "semantic", "catalog".
 // Accepted labels: any label in either registry (e.g. "REQ-DATE-03", "REQ-VAL-01").
-// deps supplies runtime context to validators that need it (may be nil).
+// Call on the full catalog before filtering so that Init functions can look up
+// cross-product context (e.g. OCP lifecycle data for platform-aligned checks).
 // Returns an error if any name is unknown.
-func LookupValidators(deps *ValidatorDeps, names ...string) ([]Validator, []CatalogValidator, error) {
+func (c *Catalog) LookupValidators(names ...string) ([]Validator, []CatalogValidator, error) {
 	labels, err := resolveLabels(names)
 	if err != nil {
 		return nil, nil, err
@@ -166,7 +162,11 @@ func LookupValidators(deps *ValidatorDeps, names ...string) ([]Validator, []Cata
 			continue
 		}
 		if e.Init != nil {
-			prodResult = append(prodResult, e.Init(deps)...)
+			v, err := e.Init(c)
+			if err != nil {
+				return nil, nil, fmt.Errorf("initializing %s: %w", e.Label, err)
+			}
+			prodResult = append(prodResult, v...)
 		} else {
 			prodResult = append(prodResult, e.Validators...)
 		}
@@ -184,6 +184,11 @@ func resolveLabels(names []string) (map[string]bool, error) {
 	labels := make(map[string]bool)
 	for _, name := range names {
 		switch name {
+		case "none":
+			if len(names) > 1 {
+				return nil, fmt.Errorf("%q cannot be combined with other validators", name)
+			}
+			return labels, nil
 		case "all":
 			for _, e := range validatorRegistry {
 				labels[e.Label] = true
@@ -234,6 +239,7 @@ func ListValidators() string {
 	var b strings.Builder
 	b.WriteString("Groups:\n")
 	b.WriteString("  all        all validators (syntax + semantic + catalog)\n")
+	b.WriteString("  none       skip all validation\n")
 	b.WriteString("  syntax     data format and structure checks\n")
 	b.WriteString("  semantic   business/lifecycle rule checks\n")
 	b.WriteString("  catalog    cross-product catalog checks\n")
@@ -371,12 +377,12 @@ func ValidateVersionNames(p Product) []string {
 	return reasons
 }
 
-func initPlatformAlignedPhases(d *ValidatorDeps) []Validator {
+func initPlatformAlignedPhases(c *Catalog) ([]Validator, error) {
 	var ocp *Product
-	if d != nil {
-		ocp = d.OCPProduct
+	if c != nil {
+		ocp = c.FindProductByName(OCPProductName)
 	}
-	return []Validator{ValidatePlatformAlignedPhases(ocp)}
+	return []Validator{ValidatePlatformAlignedPhases(ocp)}, nil
 }
 
 // ValidatePlatformAlignedPhases returns a REQ-TIER-PA-01 validator that checks

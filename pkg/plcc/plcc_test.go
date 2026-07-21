@@ -104,18 +104,39 @@ func TestFormatDate(t *testing.T) {
 }
 
 
-func TestFilterPackages(t *testing.T) {
+func TestDropWithoutPackageName(t *testing.T) {
 	c := &Catalog{Data: []Product{
 		{Name: "A", Package: "pkg-a"},
 		{Name: "B", Package: ""},
 		{Name: "C", Package: "pkg-c"},
 	}}
-	c.FilterPackages()
+	c.DropWithoutPackageName()
 	if len(c.Data) != 2 {
 		t.Fatalf("got %d products, want 2", len(c.Data))
 	}
 	if c.Data[0].Package != "pkg-a" || c.Data[1].Package != "pkg-c" {
 		t.Errorf("unexpected packages: %q, %q", c.Data[0].Package, c.Data[1].Package)
+	}
+}
+
+func TestExpandPackages(t *testing.T) {
+	c := &Catalog{Data: []Product{
+		{Name: "Single", Package: "pkg-a"},
+		{Name: "Multi", Package: "beta-op,alpha-op"},
+		{Name: "Empty", Package: ""},
+	}}
+	c.ExpandPackages()
+	if len(c.Data) != 4 {
+		t.Fatalf("got %d products, want 4", len(c.Data))
+	}
+	want := []string{"pkg-a", "beta-op", "alpha-op", ""}
+	for i, w := range want {
+		if c.Data[i].Package != w {
+			t.Errorf("Data[%d].Package = %q, want %q", i, c.Data[i].Package, w)
+		}
+	}
+	if c.Data[1].Name != "Multi" || c.Data[2].Name != "Multi" {
+		t.Errorf("expanded products should preserve Name: got %q, %q", c.Data[1].Name, c.Data[2].Name)
 	}
 }
 

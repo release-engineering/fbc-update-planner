@@ -89,6 +89,9 @@ func TestLookupValidators(t *testing.T) {
 		wantCat    bool
 		wantErr    bool
 	}{
+		{"none returns empty", []string{"none"}, false, false, false},
+		{"none with others errors", []string{"none", "syntax"}, false, false, true},
+		{"others with none errors", []string{"syntax", "none"}, false, false, true},
 		{"all returns both", []string{"all"}, true, true, false},
 		{"syntax returns prod only", []string{"syntax"}, true, false, false},
 		{"semantic returns prod only", []string{"semantic"}, true, false, false},
@@ -101,7 +104,7 @@ func TestLookupValidators(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prod, cat, err := LookupValidators(nil, tt.input...)
+			prod, cat, err := (&Catalog{}).LookupValidators(tt.input...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -117,8 +120,8 @@ func TestLookupValidators(t *testing.T) {
 		})
 	}
 	t.Run("dedup does not duplicate validators", func(t *testing.T) {
-		syntaxOnly, _, _ := LookupValidators(nil, "syntax")
-		withDup, _, _ := LookupValidators(nil, "syntax", "REQ-DATE-02")
+		syntaxOnly, _, _ := (&Catalog{}).LookupValidators("syntax")
+		withDup, _, _ := (&Catalog{}).LookupValidators("syntax", "REQ-DATE-02")
 		if len(withDup) != len(syntaxOnly) {
 			t.Errorf("syntax,REQ-DATE-02 should equal syntax alone: got %d, want %d", len(withDup), len(syntaxOnly))
 		}
@@ -557,18 +560,17 @@ func TestValidatePlatformAlignedPhasesWithOCP(t *testing.T) {
 	})
 }
 
-func TestLookupValidatorsWithDeps(t *testing.T) {
+func TestLookupValidatorsWithCatalog(t *testing.T) {
 	t.Run("with OCP context", func(t *testing.T) {
-		ocpProduct := &Product{
+		catalog := &Catalog{Data: []Product{{
 			Name: OCPProductName,
 			Versions: []Version{{Name: "4.17", Phases: []Phase{
 				{Name: PhaseFullSupport, StartDate: "2024-10-01T00:00:00.000Z", EndDate: "2025-04-01T00:00:00.000Z"},
 				{Name: PhaseMaintenance, StartDate: "2025-04-02T00:00:00.000Z", EndDate: "2025-10-01T00:00:00.000Z"},
 				{Name: PhaseEUSTerm1, StartDate: "N/A", EndDate: "N/A"},
 			}}},
-		}
-		deps := &ValidatorDeps{OCPProduct: ocpProduct}
-		validators, _, err := LookupValidators(deps, "REQ-TIER-PA-01")
+		}}}
+		validators, _, err := catalog.LookupValidators("REQ-TIER-PA-01")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -584,8 +586,8 @@ func TestLookupValidatorsWithDeps(t *testing.T) {
 		}
 	})
 
-	t.Run("nil deps requires all phases", func(t *testing.T) {
-		validators, _, err := LookupValidators(nil, "REQ-TIER-PA-01")
+	t.Run("empty catalog requires all phases", func(t *testing.T) {
+		validators, _, err := (&Catalog{}).LookupValidators("REQ-TIER-PA-01")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -594,7 +596,7 @@ func TestLookupValidatorsWithDeps(t *testing.T) {
 			{Name: PhaseMaintenance, StartDate: "2025-07-01T00:00:00.000Z", EndDate: "2025-12-31T00:00:00.000Z"},
 		}}}}
 		if reasons := validators[0](p); len(reasons) == 0 {
-			t.Error("nil deps should require EUS on odd version, but passed")
+			t.Error("empty catalog should require EUS on odd version, but passed")
 		}
 	})
 }

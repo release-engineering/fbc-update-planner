@@ -39,21 +39,12 @@ var converterRegistry = []converterEntry{
 	{"FBC-OCP-01", "converter", []Converter{ConvertOCPCompatibility}},
 }
 
-// DefaultConverters returns the standard set of version converters.
-func DefaultConverters() []Converter {
-	var result []Converter
-	for _, entry := range converterRegistry {
-		result = append(result, entry.Converters...)
-	}
-	return result
-}
-
 // ConvertVersionName parses the version name as MAJOR.MINOR and sets dst.Name.
 // FBC-VER-01
 func ConvertVersionName(src plcc.Version, dst *Version) []error {
 	name, err := ParseMajorMinor(src.Name)
 	if err != nil {
-		return []error{fmt.Errorf("FBC-VER-01: %w", err)}
+		return []error{err}
 	}
 	dst.Name = name
 	return nil
@@ -69,7 +60,7 @@ func ConvertPhases(src plcc.Version, dst *Version) []error {
 		fp, phaseErrs := translatePhase(ph)
 		if len(phaseErrs) > 0 {
 			for _, e := range phaseErrs {
-				errs = append(errs, fmt.Errorf("FBC-PHASE-01: phase %q: %w", ph.Name, e))
+				errs = append(errs, fmt.Errorf("phase %q: %w", ph.Name, e))
 			}
 		} else {
 			dst.Phases = append(dst.Phases, fp)
@@ -95,7 +86,7 @@ func ConvertOCPCompatibility(src plcc.Version, dst *Version) []error {
 		}
 		mm, err := ParseMajorMinor(trimmed)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("FBC-OCP-01: OCP compatibility: %w", err))
+			errs = append(errs, fmt.Errorf("OCP compatibility: %w", err))
 		} else {
 			ocpVersions = append(ocpVersions, mm)
 		}
@@ -112,14 +103,14 @@ func ConvertOCPCompatibility(src plcc.Version, dst *Version) []error {
 func translatePhase(ph plcc.Phase) (Phase, []error) {
 	var errs []error
 
-	start, err := translateTimestamp(ph.StartDate)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("start date: %w", err))
+	start, startErr := parseDate(ph.StartDate)
+	if startErr != nil {
+		errs = append(errs, fmt.Errorf("start date does not parse (%s)", ph.StartDate))
 	}
 
-	end, err := translateTimestamp(ph.EndDate)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("end date: %w", err))
+	end, endErr := parseDate(ph.EndDate)
+	if endErr != nil {
+		errs = append(errs, fmt.Errorf("end date does not parse (%s)", ph.EndDate))
 	}
 
 	if len(errs) > 0 {
@@ -128,13 +119,13 @@ func translatePhase(ph plcc.Phase) (Phase, []error) {
 	return Phase{Name: ph.Name, StartDate: start, EndDate: end}, nil
 }
 
-func translateTimestamp(s string) (*Date, error) {
+func parseDate(s string) (*Date, error) {
 	if s == "" || s == "N/A" {
 		return nil, nil
 	}
 	t, err := plcc.ParseTimestamp(s)
 	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp %q: %w", s, err)
+		return nil, err
 	}
 	d := NewDate(t.Year(), t.Month(), t.Day())
 	return &d, nil

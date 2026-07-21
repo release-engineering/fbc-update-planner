@@ -8,7 +8,7 @@ This document describes the rules that `plcc2fbc` uses to validate data from the
 
 After PLCC data is fetched, each product passes through four stages:
 
-1. **PLCC filtering** (`pkg/plcc/plcc.go`): basic structural filtering before any validation runs. Drops products with no `package` name (`FilterPackages`). When `-p` is specified, keeps only the requested packages (`FilterByPackageNames`) and returns an error for any names not found.
+1. **PLCC filtering** (`pkg/plcc/plcc.go`): basic structural filtering before any validation runs. Drops products with no `package` name (`DropWithoutPackageName`). When `-p` is specified, keeps only the requested packages (`FilterByPackageNames`) and returns an error for any names not found.
 2. **[PLCC-level validation](#plcc-level-validation)** (`pkg/plcc/validation.go`): validators that check raw PLCC data quality (tier, release cadence, phase completeness, dates, duplicates). Organized into three groups: `syntax`, `semantic`, and `catalog`. By default these **filter out** failing packages; with `--permissive` they produce warnings only. Use `--validators` to select which validators to run (by label or group: `all`, `syntax`, `semantic`, `catalog`).
 3. **[FBC Converter Pipeline](#fbc-converter-pipeline)** (`pkg/fbc/conversion.go`): type-checked field translation from `plcc.Version` to `fbc.Version`. Each converter validates one field and populates the corresponding output. Organized in `converterRegistry`. Always run — cannot be disabled.
 4. **[FBC Filter Pipeline](#fbc-filter-pipeline)** (`pkg/fbc/filter.go`): an ordered sequence of `Filter` callbacks that clean the translated FBC output (e.g., drop incomplete phases). Organized in `filterRegistry`.
@@ -20,7 +20,7 @@ After PLCC data is fetched, each product passes through four stages:
 | Condition | Stage | Effect |
 |---|---|---|
 | Product has no package name | PLCC filtering | Silently skipped |
-| Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--permissive` warning only |
+| Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--allow-missing` warning only |
 | Package name appears in multiple products | PLCC catalog validation | All products containing the duplicated name removed (comma-separated names are expanded); with `--permissive` warning only |
 | Invalid version name, timestamp, or OCP format | FBC converter pipeline | Entire package rejected |
 | Phase with nil start or end date | FBC filter pipeline | Phase silently removed |
@@ -83,8 +83,8 @@ Universal invariants that always apply regardless of version age: `ValidateDates
 
 **How OCP context is injected:**
 
-- `LookupValidators(deps, ...)` calls `initPlatformAlignedPhases(deps)` for the REQ-TIER-PA-01 entry, which creates an OCP-aware closure via `ValidatePlatformAlignedPhases(ocpProduct)`.
-- The OCP product is extracted from the full PLCC catalog *before* package-name filtering (since OCP itself is not an operator package and would be filtered out).
+- `catalog.LookupValidators(...)` calls `initPlatformAlignedPhases(c)` for the REQ-TIER-PA-01 entry, which looks up the OCP product via `c.FindProductByName(OCPProductName)` and creates an OCP-aware closure via `ValidatePlatformAlignedPhases(ocp)`.
+- `LookupValidators` must be called on the full catalog *before* package-name filtering (since OCP itself is not an operator package and would be filtered out).
 
 **Example:**
 
@@ -121,7 +121,7 @@ Converters **validate and translate** one field of a PLCC version into the corre
 | 2 | `ConvertPhases` | FBC-PHASE-01 | Translate phase timestamps to FBC dates |
 | 3 | `ConvertOCPCompatibility` | FBC-OCP-01 | Parse OCP compatibility versions as MAJOR.MINOR |
 
-`DefaultConverters()` returns all converters from the registry in order. `translateVersion()` iterates them to build each `fbc.Version`.
+`translateVersion()` iterates `converterRegistry` directly to build each `fbc.Version`.
 
 ---
 
