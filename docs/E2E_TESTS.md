@@ -8,6 +8,8 @@ End-to-end tests exercise the full `plcc2fbc` CLI pipeline — flag parsing, PLC
 
 `TestMain` compiles `plcc2fbc` from source into a temporary directory once per test run. All test functions invoke the compiled binary via the `runBinary` helper, which captures stdout, stderr, and the exit code. Output is compared byte-for-byte against reference files in `test/e2e/testdata/`.
 
+The e2e package uses a `//go:build e2e` build tag so that `go test ./...` (i.e. `make test`) does not include it. Run with `make e2e` (which passes `-tags=e2e`) to execute the suite.
+
 This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API level) and `cmd/plcc2fbc/main_test.go` (unit tests for the `run()` function). The e2e suite is the only layer that verifies exit code semantics and the full binary's file I/O behavior.
 
 ---

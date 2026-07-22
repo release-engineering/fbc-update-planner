@@ -18,7 +18,7 @@ test:
 
 .PHONY: e2e
 e2e:
-	go test -v -count 1 ./test/e2e/
+	go test -v -count 1 -tags=e2e ./test/e2e/
 
 .PHONY: update-e2e
 update-e2e: plcc2fbc
@@ -26,7 +26,7 @@ update-e2e: plcc2fbc
 	bin/plcc2fbc -i test/e2e/testdata/plcc.json -o yaml test/e2e/testdata/reference-fbc-validated.yaml
 
 .PHONY: update-e2e-source
-update-e2e-source: plcc2fbc
+update-e2e-source:
 	curl -sSf -o test/e2e/testdata/plcc.json $(PLCC_API_URL)
 	$(MAKE) update-e2e
 

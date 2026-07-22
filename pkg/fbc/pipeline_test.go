@@ -191,6 +191,7 @@ func TestTranslateProduct(t *testing.T) {
 			}
 			if failure == nil {
 				t.Fatal("expected failure, got nil")
+				return
 			}
 			if failure.PackageName != tt.product.Package {
 				t.Errorf("failure.PackageName = %q, want %q", failure.PackageName, tt.product.Package)

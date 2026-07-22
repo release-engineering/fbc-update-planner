@@ -1,3 +1,5 @@
+//go:build e2e
+
 /*
 Copyright 2026.
 
@@ -18,7 +20,9 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +30,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 var binaryPath string
@@ -42,6 +47,7 @@ func TestMain(m *testing.M) {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "building plcc2fbc: %v\n", err)
+		_ = os.RemoveAll(tmp)
 		os.Exit(1)
 	}
 
@@ -52,16 +58,28 @@ func TestMain(m *testing.M) {
 
 func runBinary(t *testing.T, args ...string) (stdout, stderr []byte, exitCode int) {
 	t.Helper()
-	cmd := exec.Command(binaryPath, args...)
+
+	timeout := 30 * time.Second
+	if dl, ok := t.Deadline(); ok {
+		timeout = time.Until(dl) - time.Second
+		if timeout <= 0 {
+			t.Fatalf("test deadline already passed")
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return outBuf.Bytes(), errBuf.Bytes(), exitErr.ExitCode()
 		}
-		t.Fatalf("running binary: %v", err)
+		t.Fatalf("running binary: %v\nstdout: %s\nstderr: %s", err, outBuf.Bytes(), errBuf.Bytes())
 	}
 	return outBuf.Bytes(), errBuf.Bytes(), 0
 }
@@ -418,11 +436,12 @@ func TestLogFlag(t *testing.T) {
 		t.Fatalf("reading log file: %v", err)
 	}
 
-	if len(logData) == 0 {
-		t.Error("log file should not be empty")
+	trimmed := strings.TrimSpace(string(logData))
+	if trimmed == "" {
+		t.Fatal("log file should not be empty (fixture produces validation results with default validators)")
 	}
 
-	for _, line := range strings.Split(strings.TrimSpace(string(logData)), "\n") {
+	for _, line := range strings.Split(trimmed, "\n") {
 		if !json.Valid([]byte(line)) {
 			t.Errorf("log line is not valid JSON: %s", line)
 			break
