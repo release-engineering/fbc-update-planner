@@ -37,6 +37,7 @@ test/e2e/e2e_test.go          End-to-end tests — build binary, run against fix
 test/e2e/testdata/            E2e test fixtures (plcc.json, reference YAMLs, untranslatable.json)
 docs/VALIDATION_RULES.md      Filter pipeline spec (read before touching filters)
 docs/FBC_SCHEMA.md            FBC output schema reference
+docs/E2E_TESTS.md             E2e test architecture, test matrix, golden file workflow
 schema-examples/              Example PLCC + FBC schemas for reference
 scripts/plcc-check.sh         Batch runner — runs plcc2fbc against a list of operators, summarizes results
 scripts/top-operators         Default operator list for plcc-check.sh
