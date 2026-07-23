@@ -174,6 +174,27 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestVersion(t *testing.T) {
+	resetFlags([]string{"plcc2fbc", "--version"})
+	if err := run(); err != nil {
+		t.Fatalf("--version returned unexpected error: %v", err)
+	}
+
+	oldVer, oldCommit := version, commit
+	t.Cleanup(func() { version, commit = oldVer, oldCommit })
+
+	version = "1.2.3"
+	commit = "abc1234"
+	if got, want := versionString(), "1.2.3 (abc1234)"; got != want {
+		t.Errorf("versionString() = %q, want %q", got, want)
+	}
+
+	commit = ""
+	if got, want := versionString(), "1.2.3"; got != want {
+		t.Errorf("versionString() = %q, want %q", got, want)
+	}
+}
+
 func TestRunSuccess(t *testing.T) {
 	tests := []struct {
 		name          string
