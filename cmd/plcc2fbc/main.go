@@ -98,7 +98,7 @@ func run() (err error) {
 	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
-	slog.Info("plcc2fbc starting", "version", versionString())
+	slog.Info("plcc2fbc starting", "version", versionString(), "validators", validatorsFlag)
 
 	var reportWriter io.Writer = os.Stderr
 	if logPath != "" {
