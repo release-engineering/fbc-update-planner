@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/go-toolset:9.8-1784638038 AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:9.8-1784751462 AS builder
 
 WORKDIR /opt/app-root/src
 ENV CGO_ENABLED=0
