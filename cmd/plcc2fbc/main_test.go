@@ -174,6 +174,24 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestVersion(t *testing.T) {
+	// Default version (no ldflags injection) should succeed.
+	resetFlags([]string{"plcc2fbc", "--version"})
+	if err := run(); err != nil {
+		t.Fatalf("--version returned unexpected error: %v", err)
+	}
+
+	// Verify injected version is reported.
+	old := version
+	version = "v1.2.3"
+	t.Cleanup(func() { version = old })
+
+	got := versionString()
+	if got != "v1.2.3" {
+		t.Errorf("versionString() = %q, want %q", got, "v1.2.3")
+	}
+}
+
 func TestRunSuccess(t *testing.T) {
 	tests := []struct {
 		name          string

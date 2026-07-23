@@ -63,6 +63,7 @@ func run() (err error) {
 	var validatorsFlag string
 	var listValidators bool
 	var split bool
+	var showVersion bool
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
 	flag.StringVarP(&logPath, "log", "l", "", "write validation/filtering report to a file; parent directory must exist (default: stderr)")
@@ -74,12 +75,18 @@ func run() (err error) {
 	flag.StringVar(&validatorsFlag, "validators", "all", "comma-separated list of validators to run (labels, groups: all, none, syntax, semantic, catalog)")
 	flag.BoolVar(&listValidators, "list-validators", false, "list available validators and exit")
 	flag.BoolVar(&split, "split", false, "write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 	strict := !permissive
+
+	if showVersion {
+		fmt.Println(versionString())
+		return nil
+	}
 
 	if listValidators {
 		fmt.Print(plcc.ListValidators())
@@ -91,6 +98,7 @@ func run() (err error) {
 	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.Info("plcc2fbc starting", "version", versionString())
 
 	var reportWriter io.Writer = os.Stderr
 	if logPath != "" {

@@ -1,5 +1,7 @@
 GOFLAGS := -trimpath
 DATE    := $(shell date +%y%m%d)
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "(devel)")
+LDFLAGS += -X main.version=$(VERSION)
 
 .PHONY: build
 build: plcc2fbc
