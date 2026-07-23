@@ -44,7 +44,17 @@ make generate-fbc
 
 Builds the tool, runs it against the live PLCC API and writes output to the fbc-samples dir
 
+## Testing
+
+```shell
+make test    # unit + integration tests
+make e2e     # end-to-end tests (builds binary, runs against golden fixtures)
+```
+
+See [End-to-End Tests](docs/E2E_TESTS.md) for the e2e test matrix and golden file update workflow.
+
 ## Documentation
 
 - [Validation Rules](docs/VALIDATION_RULES.md)
 - [FBC Lifecycle Schema](docs/FBC_SCHEMA.md)
+- [End-to-End Tests](docs/E2E_TESTS.md)
