@@ -88,6 +88,7 @@ func runBinary(t *testing.T, args ...string) (stdout, stderr []byte, exitCode in
 }
 
 func extractPackageName(yamlDoc string) string {
+	// "package:" appears in the first few lines of an FBC YAML document
 	for _, line := range strings.SplitN(yamlDoc, "\n", 5) {
 		if name, ok := strings.CutPrefix(line, "package: "); ok {
 			return name
@@ -361,8 +362,13 @@ func TestDumpPLCC(t *testing.T) {
 		t.Fatalf("reading output: %v", err)
 	}
 
-	if !json.Valid(got) {
-		t.Fatal("output is not valid JSON")
+	var dump map[string]interface{}
+	if err := json.Unmarshal(got, &dump); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+
+	if _, ok := dump["data"]; !ok {
+		t.Error("PLCC dump should have a top-level 'data' field")
 	}
 
 	if !strings.Contains(string(got), "aws-efs-csi-driver-operator") {
@@ -412,12 +418,13 @@ func TestJSONOutput(t *testing.T) {
 		t.Fatalf("reading output: %v", err)
 	}
 
-	if !json.Valid(got) {
-		t.Fatal("output is not valid JSON")
+	var doc map[string]interface{}
+	if err := json.Unmarshal(got, &doc); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
 	}
 
-	if !strings.Contains(string(got), `"package":"aws-efs-csi-driver-operator"`) {
-		t.Error("JSON output should contain the package name")
+	if doc["package"] != "aws-efs-csi-driver-operator" {
+		t.Errorf("JSON output package = %v, want %q", doc["package"], "aws-efs-csi-driver-operator")
 	}
 }
 
@@ -484,8 +491,8 @@ func TestPermissive(t *testing.T) {
 	}
 	permissiveCount := strings.Count(string(permissiveData), "package: ")
 
-	if permissiveCount < strictCount {
-		t.Errorf("permissive output (%d packages) should have >= strict output (%d packages)",
+	if permissiveCount <= strictCount {
+		t.Errorf("permissive output (%d packages) should have > strict output (%d packages)",
 			permissiveCount, strictCount)
 	}
 }
