@@ -75,6 +75,9 @@ func runBinary(t *testing.T, args ...string) (stdout, stderr []byte, exitCode in
 	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	if err != nil {
+		if ctx.Err() != nil {
+			t.Fatalf("binary timed out after %v\nstdout: %s\nstderr: %s", timeout, outBuf.Bytes(), errBuf.Bytes())
+		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			return outBuf.Bytes(), errBuf.Bytes(), exitErr.ExitCode()
