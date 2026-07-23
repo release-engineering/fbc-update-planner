@@ -148,9 +148,13 @@ Output blobs use schema `io.openshift.operators.lifecycles.v1alpha1`. See `docs/
 
 ### Writing tests
 
-- Test data lives in `pkg/fbc/testdata/` (plcc.json, reference-fbc.yaml, reference-fbc.json, reference-fbc-pretty.json)
-- `pipeline_test.go` is the integration test — compares full pipeline output against reference files
-- If your change alters valid output, update reference files to match
+Three test tiers, each with its own scope:
+
+1. **Unit tests** (`*_test.go` alongside source) — test individual functions. Run with `make test`.
+2. **Integration tests** (`pkg/fbc/pipeline_test.go`) — compare full pipeline output against reference files in `pkg/fbc/testdata/`.
+3. **E2E tests** (`test/e2e/e2e_test.go`) — build the binary and invoke it as a subprocess, verifying exit codes, file I/O, and CLI flag behavior against golden files in `test/e2e/testdata/`. Gated by `//go:build e2e` so `make test` excludes them; run with `make e2e` (passes `-tags=e2e`). See `docs/E2E_TESTS.md` for the test matrix and golden file update workflow.
+
+- If your change alters valid output, update reference files to match (`make update-e2e` for e2e golden files)
 - Standard library test assertions — no external assertion libraries
 
 ### Version format
