@@ -191,6 +191,7 @@ func TestTranslateProduct(t *testing.T) {
 			}
 			if failure == nil {
 				t.Fatal("expected failure, got nil")
+				return // unreachable: suppresses staticcheck SA5011 on failure.PackageName below
 			}
 			if failure.PackageName != tt.product.Package {
 				t.Errorf("failure.PackageName = %q, want %q", failure.PackageName, tt.product.Package)

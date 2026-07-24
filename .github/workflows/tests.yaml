@@ -19,6 +19,9 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Run e2e tests
+        run: make e2e
+
       - name: Run lint
         uses: golangci/golangci-lint-action@v9
         with:

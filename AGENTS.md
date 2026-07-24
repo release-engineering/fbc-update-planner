@@ -33,8 +33,11 @@ pkg/fbc/writer_test.go        Tests for writers
 pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference output
 pkg/fbc/testdata/             Test fixtures (plcc.json, reference-fbc.yaml, etc.)
 pkg/report/result.go          Shared ValidationResult type + JSON-lines log writer
+test/e2e/e2e_test.go          End-to-end tests — build binary, run against fixture, compare output
+test/e2e/testdata/            E2e test fixtures (plcc.json, reference YAMLs, untranslatable.json)
 docs/VALIDATION_RULES.md      Filter pipeline spec (read before touching filters)
 docs/FBC_SCHEMA.md            FBC output schema reference
+docs/E2E_TESTS.md             E2e test architecture, test matrix, golden file workflow
 schema-examples/              Example PLCC + FBC schemas for reference
 scripts/plcc-check.sh         Batch runner — runs plcc2fbc against a list of operators, summarizes results
 scripts/top-operators         Default operator list for plcc-check.sh
@@ -44,9 +47,12 @@ scripts/top-operators         Default operator list for plcc-check.sh
 ## Commands
 
 ```sh
-make build          # → bin/plcc2fbc
-make test           # go test -v -count 1 ./...
-make generate-fbc   # build + run against live PLCC API, write YAML + logs to fbc-samples/
+make build              # → bin/plcc2fbc
+make test               # go test -v -count 1 ./...
+make e2e                # go test -v -count 1 ./test/e2e/
+make update-e2e         # regenerate e2e reference files from existing testdata/plcc.json
+make update-e2e-source  # fetch fresh plcc.json from PLCC API + regenerate references
+make generate-fbc       # build + run against live PLCC API, write YAML + logs to fbc-samples/
 ```
 
 No separate lint command — CI runs `golangci-lint` with defaults (no `.golangci.yaml`).
@@ -142,9 +148,13 @@ Output blobs use schema `io.openshift.operators.lifecycles.v1alpha1`. See `docs/
 
 ### Writing tests
 
-- Test data lives in `pkg/fbc/testdata/` (plcc.json, reference-fbc.yaml, reference-fbc.json, reference-fbc-pretty.json)
-- `pipeline_test.go` is the integration test — compares full pipeline output against reference files
-- If your change alters valid output, update reference files to match
+Three test tiers, each with its own scope:
+
+1. **Unit tests** (`*_test.go` alongside source) — test individual functions. Run with `make test`.
+2. **Integration tests** (`pkg/fbc/pipeline_test.go`) — compare full pipeline output against reference files in `pkg/fbc/testdata/`.
+3. **E2E tests** (`test/e2e/e2e_test.go`) — build the binary and invoke it as a subprocess, verifying exit codes, file I/O, and CLI flag behavior against golden files in `test/e2e/testdata/`. Gated by `//go:build e2e` so `make test` excludes them; run with `make e2e` (passes `-tags=e2e`). See `docs/E2E_TESTS.md` for the test matrix and golden file update workflow.
+
+- If your change alters valid output, update reference files to match (`make update-e2e` for e2e golden files)
 - Standard library test assertions — no external assertion libraries
 
 ### Version format
