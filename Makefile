@@ -1,6 +1,6 @@
 GOFLAGS := -trimpath
 DATE    := $(shell date +%y%m%d)
-VERSION := $(shell (git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0") | sed 's/^v//')
+VERSION := $(shell (git describe --tags --abbrev=0 2>/dev/null || cat VERSION 2>/dev/null || echo "0.0.0") | sed 's/^v//')
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null)
 LDFLAGS += -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
