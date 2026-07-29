@@ -18,7 +18,7 @@ RUN LDFLAGS="-s -w" make COMMIT="${COMMIT}" build
 
 ## Final image
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1785214301
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1785339117
 
 ARG VERSION
 LABEL \
