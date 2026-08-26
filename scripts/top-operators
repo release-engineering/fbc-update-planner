@@ -16,7 +16,7 @@ rook-ceph-operator
 cluster-observability-operator
 kubevirt-hyperconverged
 cephcsi-operator
-grafana-operator
+compliance-operator
 odf-dependencies
 openshift-pipelines-operator-rh
 devworkspace-operator
