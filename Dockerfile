@@ -3,7 +3,7 @@ ARG VERSION=0.1.0
 # COMMIT is injected by the CI pipeline (Tekton/Konflux); empty when building locally without .git
 ARG COMMIT=""
 
-FROM registry.access.redhat.com/ubi9/go-toolset:9.8-1787774815 AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:9.8-1788245275 AS builder
 
 ARG COMMIT
 WORKDIR /opt/app-root/src
