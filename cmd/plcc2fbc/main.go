@@ -155,6 +155,8 @@ func run() (err error) {
 	}
 
 	catalog.ExpandPackages()
+	slog.Info("PLCC product expansion", "count", catalog.Len())
+
 	catalog.SortByPackage()
 
 	var count int
@@ -257,8 +259,8 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 		return nil, fmt.Errorf("loading PLCC data: %w", err)
 	}
 
-	slog.Info("fetched products from PLCC", "count", catalog.Len())
-
+	// Validators can have init functions that require an already loaded catalog,
+	// so collect them only after the catalog is loaded.
 	var validatorNames []string
 	for _, name := range strings.Split(validatorsFlag, ",") {
 		name = strings.TrimSpace(name)
@@ -272,6 +274,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	}
 	slog.Info("resolved validators", "product", len(validators), "catalog", len(catalogValidators))
 
+	slog.Info("fetched products from PLCC", "count", catalog.Len())
 	if packages != "" {
 		var names []string
 		for _, name := range strings.Split(packages, ",") {
@@ -295,7 +298,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	} else {
 		catalog.DropWithoutPackageName()
 	}
-	slog.Info("filtered packages", "count", catalog.Len())
+	slog.Info("filtered products", "count", catalog.Len())
 	catalog.SortByPackage()
 
 	if len(catalogValidators) > 0 {
@@ -333,7 +336,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 		}
 	}
 	if strict {
-		slog.Info("PLCC package validation", "passed", len(filtered), "filtered", len(catalog.Data)-len(filtered))
+		slog.Info("PLCC product validation", "passed", len(filtered), "filtered", len(catalog.Data)-len(filtered))
 		catalog.Data = filtered
 	}
 

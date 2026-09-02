@@ -1,0 +1,31 @@
+Building plcc2fbc...
+Running plcc2fbc with 3 operators...
+
+=== Requested operators ===
+  ✓  aws-efs-csi-driver-operator
+  !  barbican-operator                 [WITH ISSUES]
+  ✗  totally-nonexistent-operator-xyz  [NOT FOUND]
+
+=== Summary ===
+  Total:         3
+  Passed:        1
+  Not found:     1
+  Duplicated:    0
+  With issues:   1
+
+=== Validation issues detail ===
+  barbican-operator:
+    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
+    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
+    - REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+
+=== CSV operator lists ===
+- Missing: totally-nonexistent-operator-xyz
+- Duplicated: 
+- With issues: barbican-operator
+- Passed: aws-efs-csi-driver-operator
+
+ === Generated files ===
+  $OUTDIR/fbc-output.yaml FBC blobs
+  $OUTDIR/validation.jsonl Validation results
+  $OUTDIR/slog.json Operational log

@@ -1,12 +1,14 @@
 # End-to-End Tests
 
-End-to-end tests exercise the full `plcc2fbc` CLI pipeline — flag parsing, PLCC loading, validation, FBC translation, filtering, and file I/O — by building the binary and invoking it as a subprocess against golden reference files.
+End-to-end tests exercise the full `plcc2fbc` CLI pipeline — flag parsing, PLCC loading, validation, FBC translation, filtering, and file I/O — by building the binary and invoking it as a subprocess against golden reference files. `test/e2e/plcc_check_test.go` additionally covers `scripts/plcc-check.sh`, the batch runner built on top of the binary.
 
 ---
 
 ## Architecture
 
 `TestMain` compiles `plcc2fbc` from source into a temporary directory once per test run. All test functions invoke the compiled binary via the `runBinary` helper, which captures stdout, stderr, and the exit code. Output is compared byte-for-byte against reference files in `test/e2e/testdata/`.
+
+`test/e2e/plcc_check_test.go` instead invokes `scripts/plcc-check.sh` directly via `runPlccCheck` — the script builds its own copy of the binary (via `make build`) and requires `scripts/plcc-check.sh`'s `-i <file>` flag to point it at a fixture instead of the live PLCC API.
 
 The e2e package uses a `//go:build e2e` build tag so that `go test ./...` (i.e. `make test`) does not include it. Run with `make e2e` (which passes `-tags=e2e`) to execute the suite.
 
@@ -33,6 +35,13 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `TestPermissive` | single-file | all | `--permissive` produces at least as many packages as strict mode |
 | `TestListValidators` | N/A | N/A | `--list-validators` exits 0 and prints `Groups:` and `Labels:` sections |
 
+`test/e2e/plcc_check_test.go` covers `scripts/plcc-check.sh` separately:
+
+| Test | Mode | What It Verifies |
+|------|------|-------------------|
+| `TestPlccCheckOperatorsFile` | `plcc-check-operators.txt` (3 packages: pass/issues/missing) | `summary.txt`, `validation.jsonl`, `fbc-output.yaml`, and `slog.json` message sequence match golden fixtures |
+| `TestPlccCheckAllPackages` | no operators file (full dataset), `--validators none` | `fbc-output.yaml` matches `reference-fbc.yaml` byte-for-byte; `summary.txt` reports the expected pass/fail counts |
+
 ---
 
 ## Testdata Files
@@ -43,12 +52,15 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `reference-fbc.yaml` | ~112 KB | Expected output with `--validators none` (61 packages). |
 | `reference-fbc-validated.yaml` | ~59 KB | Expected output with all validators (19 packages). Smaller because validators filter out packages with data quality issues. |
 | `untranslatable.json` | ~240 B | Hand-crafted fixture with an invalid version name (`not-a-version`). Used by the exit-code-2 test to produce zero valid FBC output. |
+| `plcc-check-operators.txt` | ~150 B | Operators file for `TestPlccCheckOperatorsFile`: one passing package, one with validation issues, one that doesn't exist in `plcc.json`. |
+| `plcc-check/operators-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckOperatorsFile`. The output directory's absolute path is normalized to `$OUTDIR` before comparison, since it's a fresh `t.TempDir()` on every run. |
+| `plcc-check/operators-validation.jsonl` | ~400 B | Expected `validation.jsonl` for `TestPlccCheckOperatorsFile`. |
 
 ---
 
 ## Golden File Update Workflow
 
-When a code change intentionally alters the FBC output (new filter, converter change, schema update), the reference files must be regenerated. Two Makefile targets handle this:
+When a code change intentionally alters the FBC output (new filter, converter change, schema update), the reference files must be regenerated. Three Makefile targets handle this:
 
 **`make update-e2e`** — Regenerates both reference YAMLs from the existing `testdata/plcc.json`:
 
@@ -68,6 +80,19 @@ make update-e2e
 
 Use this to refresh the upstream data snapshot. Both the input and references are updated together.
 
+**`make update-e2e-plcc-check`** — Regenerates `plcc-check/operators-summary.txt` and `plcc-check/operators-validation.jsonl`, the small, hand-reviewed fixtures for `TestPlccCheckOperatorsFile`:
+
+```sh
+out=$(mktemp -d)
+./scripts/plcc-check.sh -i test/e2e/testdata/plcc.json -o "$out" test/e2e/testdata/plcc-check-operators.txt
+sed "s#$out#\$OUTDIR#g" "$out/summary.txt" > test/e2e/testdata/plcc-check/operators-summary.txt
+cp "$out/validation.jsonl" test/e2e/testdata/plcc-check/operators-validation.jsonl
+```
+
+Review the diff carefully — these are hand-reviewed fixtures, not a bulk snapshot. Run this if `TestPlccCheckOperatorsFile` legitimately changes behavior (e.g. a change to `scripts/plcc-check.sh` or the validators it exercises).
+
+If `TestPlccCheckAllPackages`'s expected counts (`Total`, `Passed`, `Not found`, `With issues`) change, update the literal strings in `test/e2e/plcc_check_test.go` directly — there's no golden file for that test's `summary.txt`, since diffing the full ~150-package file isn't worth the review overhead.
+
 ---
 
 ## Helper Functions
@@ -78,14 +103,17 @@ Use this to refresh the upstream data snapshot. Both the input and references ar
 | `extractPackageName(yamlDoc)` | Parses the `package:` field from a YAML document string. |
 | `splitYAMLReference(t, path)` | Splits a multi-document YAML file on `---\n` delimiters into a `map[string]string` keyed by package name. |
 | `testSplit(t, referencePath, extraArgs...)` | Shared logic for split-mode tests: parses the reference, runs the binary with `--split`, and compares each per-package output file. |
+| `runPlccCheck(t, args...)` | Executes `scripts/plcc-check.sh` (in `plcc_check_test.go`), returns stdout, stderr, and exit code. Longer default timeout than `runBinary` since the script rebuilds the binary itself. |
+| `slogField(t, line, field)` | Parses one `slog.json` line and returns a named field, failing the test if the line isn't valid JSON or the field is absent. Used to check specific counts without requiring an exact byte-for-byte match (the `time` and `version` fields vary on every run). |
 
 ---
 
 ## Adding a New E2E Test
 
-1. Write a test function in `test/e2e/e2e_test.go`. Use `runBinary` to invoke the binary with the desired flags.
+1. Write a test function in `test/e2e/e2e_test.go` (for the `plcc2fbc` binary) or `test/e2e/plcc_check_test.go` (for `scripts/plcc-check.sh`). Use `runBinary` or `runPlccCheck` to invoke it with the desired flags.
 2. For golden-file comparison: compare output against existing reference files or segments extracted via `splitYAMLReference`.
 3. For error-path tests: assert both the exit code and a stderr substring.
 4. For split-mode tests: use the `testSplit` helper or follow its pattern.
 5. If your test needs a new fixture, add it to `test/e2e/testdata/`. Minimal hand-crafted fixtures (like `untranslatable.json`) are preferred for error-path tests.
-6. Run `make e2e` to verify.
+6. If comparing a file that embeds non-deterministic data (a temp-dir path, a timestamp, a version string), normalize it before comparing rather than skipping the check — see `TestPlccCheckOperatorsFile`'s `$OUTDIR` substitution and `slogField` usage.
+7. Run `make e2e` to verify.

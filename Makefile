@@ -30,6 +30,14 @@ update-e2e-source:
 	curl -sSf -o test/e2e/testdata/plcc.json $(PLCC_API_URL)
 	$(MAKE) update-e2e
 
+.PHONY: update-e2e-plcc-check
+update-e2e-plcc-check:
+	$(eval OUT := $(shell mktemp -d))
+	./scripts/plcc-check.sh -i test/e2e/testdata/plcc.json -o $(OUT) test/e2e/testdata/plcc-check-operators.txt
+	sed 's#$(OUT)#$$OUTDIR#g' $(OUT)/summary.txt > test/e2e/testdata/plcc-check/operators-summary.txt
+	cp $(OUT)/validation.jsonl test/e2e/testdata/plcc-check/operators-validation.jsonl
+	rm -rf $(OUT)
+
 .PHONY: generate-fbc
 generate-fbc: plcc2fbc
 	mkdir -p fbc-samples

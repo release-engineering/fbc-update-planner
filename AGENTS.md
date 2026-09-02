@@ -35,14 +35,17 @@ pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference ou
 pkg/fbc/testdata/             Test fixtures (plcc.json, reference-fbc.yaml, etc.)
 pkg/report/result.go          Shared ValidationResult type + JSON-lines log writer
 test/e2e/e2e_test.go          End-to-end tests — build binary, run against fixture, compare output
-test/e2e/testdata/            E2e test fixtures (plcc.json, reference YAMLs, untranslatable.json)
+test/e2e/plcc_check_test.go   End-to-end tests for scripts/plcc-check.sh against fixture, compare output
+test/e2e/testdata/            E2e test fixtures (plcc.json, reference YAMLs, untranslatable.json, plcc-check/)
 docs/VALIDATION_RULES.md      Filter pipeline spec (read before touching filters)
 docs/FBC_SCHEMA.md            FBC output schema reference
 docs/E2E_TESTS.md             E2e test architecture, test matrix, golden file workflow
 docs/RELEASING.md             Release process and version injection reference
 schema-examples/              Example PLCC + FBC schemas for reference
-scripts/plcc-check.sh         Batch runner — runs plcc2fbc against a list of operators, summarizes results
-scripts/top-operators         Default operator list for plcc-check.sh
+scripts/plcc-check.sh         Batch runner — runs plcc2fbc against an operator list (or the full PLCC dataset if
+                               none given) and writes summary.txt, validation.jsonl, slog.json, and the FBC/PLCC
+                               dump to an output directory
+scripts/top-operators         Example operator list for plcc-check.sh
 .goreleaser.yaml              GoReleaser config for cross-platform binary builds
 .github/workflows/tests.yaml  CI workflow — runs tests + lint on PRs to main
 .github/workflows/release.yaml  Release workflow — runs GoReleaser on v* tag push
@@ -56,6 +59,7 @@ make test               # go test -v -count 1 ./...
 make e2e                # go test -v -count 1 ./test/e2e/
 make update-e2e         # regenerate e2e reference files from existing testdata/plcc.json
 make update-e2e-source  # fetch fresh plcc.json from PLCC API + regenerate references
+make update-e2e-plcc-check  # regenerate plcc-check.sh e2e golden files from existing testdata/plcc.json
 make generate-fbc       # build + run against live PLCC API, write YAML + logs to fbc-samples/
 ```
 
