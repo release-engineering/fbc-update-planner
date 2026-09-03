@@ -19,6 +19,17 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Install opm
+        env:
+          OPM_VERSION: v1.74.0
+          OPM_SHA256: cf1bd699be72e0a4511208afdf45444fc47d21eb2ffed0c204520ff50b5a4691
+        run: |
+          curl -sSfL -o /tmp/opm \
+            "https://github.com/operator-framework/operator-registry/releases/download/${OPM_VERSION}/linux-amd64-opm"
+          echo "${OPM_SHA256}  /tmp/opm" | sha256sum -c -
+          chmod +x /tmp/opm
+          sudo install /tmp/opm /usr/local/bin/opm
+
       - name: Run e2e tests
         run: make e2e
 

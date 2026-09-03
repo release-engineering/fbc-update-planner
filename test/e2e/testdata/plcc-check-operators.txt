@@ -1,0 +1,7 @@
+# Operators file for the plcc-check.sh e2e test.
+# One passing package, one with validation issues, one that doesn't exist,
+# and one that's duplicated across two products in plcc.json.
+aws-efs-csi-driver-operator
+barbican-operator
+totally-nonexistent-operator-xyz
+amq-streams

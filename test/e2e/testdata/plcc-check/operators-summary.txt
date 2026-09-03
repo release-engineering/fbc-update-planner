@@ -1,0 +1,35 @@
+Building plcc2fbc...
+Running plcc2fbc with 4 operators...
+
+=== Requested operators ===
+     PLCC       OPERATOR
+  *  OK         aws-efs-csi-driver-operator     
+     INVALID    barbican-operator               
+     MISSING    totally-nonexistent-operator-xyz
+     DUPLICATE  amq-streams                     
+
+=== Summary ===
+  Total operators:   4
+  PLCC OK:           1 / 4
+  PLCC DUPLICATE:    1 / 4
+  PLCC INVALID:      1 / 4
+  PLCC MISSING:      1 / 4
+
+=== Validation issues detail ===
+  amq-streams:
+    - REQ-VAL-01: package "amq-streams" appears in 2 products
+  barbican-operator:
+    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
+    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
+    - REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+
+=== CSV operator lists ===
+- Missing: totally-nonexistent-operator-xyz
+- Duplicated: amq-streams
+- With issues: barbican-operator
+- PLCC OK: aws-efs-csi-driver-operator
+
+ === Generated files ===
+  $OUTDIR/fbc-output.yaml FBC blobs
+  $OUTDIR/validation.jsonl Validation results
+  $OUTDIR/slog.json Operational log
