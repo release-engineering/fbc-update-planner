@@ -25,6 +25,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/avast/retry-go/v4"
 )
 
 // PackagesNotFoundError is returned when requested package names are not found in the catalog.
@@ -105,28 +107,23 @@ func Fetch() (*Catalog, error) {
 	return FetchFrom(APIURL, &http.Client{Timeout: 30 * time.Second})
 }
 
-var sleepFunc = time.Sleep
+var retryOptions = []retry.Option{
+	retry.Attempts(3),
+	retry.Delay(60 * time.Second),
+	retry.DelayType(retry.BackOffDelay),
+	retry.LastErrorOnly(true),
+}
 
 // FetchFrom retrieves the product catalog from the given URL using the provided HTTP client.
-// It retries up to 3 times with exponential backoff on errors.
+// It makes up to 3 attempts with exponential backoff on errors.
 func FetchFrom(url string, client *http.Client) (*Catalog, error) {
-	const maxRetries = 3
-	var lastErr error
-
-	for attempt := range maxRetries {
-		if attempt > 0 {
-			// attempt 1: 60s, attempt 2: 120s
-			sleepFunc(time.Duration(60<<(attempt-1)) * time.Second)
-		}
-
-		catalog, err := fetch(url, client)
-		if err == nil {
-			return catalog, nil
-		}
-		lastErr = err
+	catalog, err := retry.DoWithData(func() (*Catalog, error) {
+		return fetch(url, client)
+	}, retryOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("after retries: %w", err)
 	}
-
-	return nil, fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
+	return catalog, nil
 }
 
 func fetch(url string, client *http.Client) (*Catalog, error) {

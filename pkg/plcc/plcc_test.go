@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/avast/retry-go/v4"
 )
 
 func TestPackages(t *testing.T) {
@@ -274,12 +276,12 @@ func TestSortByPackage(t *testing.T) {
 	}
 }
 
-// mockSleep disables retry backoff delays for the duration of the test.
-func mockSleep(t *testing.T) {
+// mockRetry disables retry backoff delays for the duration of the test.
+func mockRetry(t *testing.T) {
 	t.Helper()
-	original := sleepFunc
-	sleepFunc = func(time.Duration) {}
-	t.Cleanup(func() { sleepFunc = original })
+	original := retryOptions
+	retryOptions = append([]retry.Option(nil), append(original, retry.Delay(0))...)
+	t.Cleanup(func() { retryOptions = original })
 }
 
 func TestFetchFrom(t *testing.T) {
@@ -310,7 +312,7 @@ func TestFetchFrom(t *testing.T) {
 }
 
 func TestFetchFromHTTPError(t *testing.T) {
-	mockSleep(t)
+	mockRetry(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -323,7 +325,7 @@ func TestFetchFromHTTPError(t *testing.T) {
 }
 
 func TestFetchFromHTTPErrorRetries(t *testing.T) {
-	mockSleep(t)
+	mockRetry(t)
 	attempts := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -341,7 +343,7 @@ func TestFetchFromHTTPErrorRetries(t *testing.T) {
 }
 
 func TestFetchFromRetry(t *testing.T) {
-	mockSleep(t)
+	mockRetry(t)
 	attempts := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
