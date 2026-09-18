@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/avast/retry-go/v4"
+	"github.com/avast/retry-go/v5"
 )
 
 // PackagesNotFoundError is returned when requested package names are not found in the catalog.
