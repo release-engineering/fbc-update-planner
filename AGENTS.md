@@ -7,7 +7,7 @@
 ## Tech Stack
 
 - **Language:** Go (version in `go.mod`)
-- **Dependencies:** `sigs.k8s.io/yaml` for YAML marshaling, `spf13/pflag` for CLI flag parsing
+- **Dependencies:** `sigs.k8s.io/yaml` for YAML marshaling, `spf13/pflag` for CLI flag parsing, `github.com/avast/retry-go/v4` for HTTP retry logic
 - **CI:** GitHub Actions on PRs to `main` — runs `make test` + `golangci-lint` (see `.github/workflows/tests.yaml`)
 - **License:** Apache 2.0 (all `.go` files carry the header)
 
