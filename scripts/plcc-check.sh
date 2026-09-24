@@ -577,6 +577,38 @@ print_issues_detail() {
     fi
 }
 
+print_missing_lifecycle_detail() {
+    [[ -n "$g_catalog_image" ]] || return 0
+
+    log_info ""
+    log_info "=== Missing lifecycle versions ==="
+
+    local has_entries=false
+    if [[ ${#g_operators[@]} -gt 0 ]]; then
+        local operator_index name status missing_versions
+        for operator_index in "${!g_operators[@]}"; do
+            name="${g_operators[$operator_index]}"
+            status="${g_operator_catalog_statuses[$operator_index]}"
+            # Skip operators with no lifecycle data (MISSING), full coverage
+            # (OK), or no catalog check at all (-).
+            [[ "$status" == "MISSING" || "$status" == "-" || "$status" == "OK" ]] && continue
+            # Find bundle versions without matching lifecycle entries.
+            missing_versions=$(awk -F'\t' -v pkg="$name" '
+                FILENAME == ARGV[1] && $1 == pkg { lifecycle[$2] = 1; next }
+                FILENAME == ARGV[2] && $1 == pkg && !($2 in lifecycle) { print $2 }
+            ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG_BUNDLE_VERSIONS" \
+                | sort -t. -k1,1n -k2,2n | paste -sd, -)
+            if [[ -n "$missing_versions" ]]; then
+                log_info "  ${name}: ${missing_versions}"
+                has_entries=true
+            fi
+        done
+    fi
+    if ! $has_entries; then
+        log_info "  (none)"
+    fi
+}
+
 print_csv_lists() {
     local missing_csv duplicated_csv issues_csv plcc_ok_csv
     local catalog_ok_csv catalog_partial_csv catalog_missing_csv fully_done_csv
@@ -835,6 +867,7 @@ main() {
     print_operator_list
     print_summary
     print_issues_detail
+    print_missing_lifecycle_detail
     print_csv_lists
 
     copy_output_files

@@ -310,6 +310,22 @@ func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
 	if strings.Contains(string(stdout), "*  OK         1/2") {
 		t.Errorf("PLCC OK + catalog partial operator should not earn the done marker:\n%s", stdout)
 	}
+	// Missing lifecycle versions section
+	if !strings.Contains(string(stdout), "=== Missing lifecycle versions ===") {
+		t.Errorf("stdout missing 'Missing lifecycle versions' section:\n%s", stdout)
+	}
+	for _, want := range []string{
+		"  cli-manager: 0.2",
+		"  operator-partial: 1.2",
+	} {
+		if !strings.Contains(string(stdout), want) {
+			t.Errorf("stdout missing missing-lifecycle entry %q:\n%s", want, stdout)
+		}
+	}
+	// operator-missing has MISSING status → should not appear in missing lifecycle section
+	if strings.Contains(string(stdout), "  operator-missing:") {
+		t.Errorf("operator-missing should be skipped in missing lifecycle versions (no lifecycle data):\n%s", stdout)
+	}
 	// Catalog partial CSV list
 	if !strings.Contains(string(stdout), "- Catalog partial: ") {
 		t.Errorf("stdout missing catalog partial CSV entry:\n%s", stdout)
