@@ -475,14 +475,14 @@ collect_results() {
         # Compute per-operator catalog status: OK, MISSING, or X/Y.
         # Input order matters: lifecycle versions, bundle versions, operators.
         awk -F'\t' '
-            FILENAME == ARGV[1] { lifepkg[$1] = 1; lmm[$1 SUBSEP $2] = 1; next }
-            FILENAME == ARGV[2] { if (!seen[$1 SUBSEP $2]++) { y[$1]++; if (($1 SUBSEP $2) in lmm) x[$1]++ } ; next }
+            FILENAME == ARGV[1] { lifepkg[$1] = 1; lifecycle_mm[$1 SUBSEP $2] = 1; next }
+            FILENAME == ARGV[2] { if (!seen[$1 SUBSEP $2]++) { bundle_total[$1]++; if (($1 SUBSEP $2) in lifecycle_mm) bundle_covered[$1]++ } ; next }
             {
                 op = $0
                 if (!(op in lifepkg)) { print "MISSING"; next }
-                yy = y[op] + 0; xx = x[op] + 0
-                if (yy == 0 || xx == yy) { print "OK" }
-                else { print xx "/" yy }
+                total = bundle_total[op] + 0; covered = bundle_covered[op] + 0
+                if (total == 0 || covered == total) { print "OK" }
+                else { print covered "/" total }
             }
         ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG_BUNDLE_VERSIONS" "$FILE_OPERATORS" \
             > "$FILE_CATALOG_STATUS"

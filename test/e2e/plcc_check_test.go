@@ -255,12 +255,13 @@ func TestPlccCheckCatalogPresence(t *testing.T) {
 
 // TestPlccCheckCatalogVersionCoverage verifies that --catalog-image checks
 // per-version coverage of shipped bundle versions against lifecycle entries.
-// testdata/catalog-fbc-versions contains:
-//   - operator-full: bundles 1.0.1, 1.1.0 / lifecycle 1.0, 1.1 → OK
-//   - operator-partial: bundles 1.0.0, 1.1.0, 1.2.0 / lifecycle 1.0, 1.1 → 2/3
-//   - operator-missing: bundles 1.0.0 / no lifecycle → MISSING
-//   - aws-efs-csi-driver-operator: lifecycle 1.0 / no bundles → OK (0/0)
-//   - cli-manager: bundles 0.1.0, 0.2.0 / lifecycle 0.1 → 1/2 (PLCC OK + catalog partial)
+// The fixture directory testdata/catalog-fbc-versions provides five operators
+// covering each catalog status: full bundle coverage (OK), partial coverage
+// (X/Y), no lifecycle entry (MISSING), lifecycle-only with no bundles (OK),
+// and a PLCC-valid operator with partial catalog coverage (exercises the
+// done-marker guard). Synthetic operator names (operator-full, operator-partial,
+// operator-missing) are intentionally absent from testdata/plcc.json so their
+// PLCC status is MISSING, isolating the catalog coverage logic under test.
 func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
 	fixtureDir := t.TempDir()
 	operatorsPath := filepath.Join(fixtureDir, "operators.txt")
