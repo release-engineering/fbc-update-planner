@@ -562,11 +562,11 @@ print_summary() {
     if [[ -n "$g_catalog_image" ]]; then
         local catalog_ok_count=${#g_results_catalogok[@]}
         local catalog_partial_count=${#g_results_catalogpartial[@]}
-        local catalogmissing_count=${#g_results_catalogmissing[@]}
+        local catalog_missing_count=${#g_results_catalogmissing[@]}
         local done_count=${#g_results_allpassed[@]}
         log_info "$(printf "  %-18s %d / %d\n" "CATALOG OK:" "$catalog_ok_count" "$total")"
         log_info "$(printf "  %-18s %d / %d\n" "CATALOG PARTIAL:" "$catalog_partial_count" "$total")"
-        log_info "$(printf "  %-18s %d / %d\n" "CATALOG MISSING:" "$catalogmissing_count" "$total")"
+        log_info "$(printf "  %-18s %d / %d\n" "CATALOG MISSING:" "$catalog_missing_count" "$total")"
         log_info "$(printf "  %-18s %d / %d\n" "Fully done:" "$done_count" "$total")"
     fi
 }
@@ -758,7 +758,7 @@ _render_webhook_payload() {
     local missing_count=${#g_results_missing[@]}
     local duplicated_count=${#g_results_duplicated[@]}
     local issues_count=${#g_results_withissues[@]}
-    local catalogmissing_count=${#g_results_catalogmissing[@]}
+    local catalog_missing_count=${#g_results_catalogmissing[@]}
     local catalog_ok_count=${#g_results_catalogok[@]}
     local catalog_partial_count=${#g_results_catalogpartial[@]}
 
@@ -773,7 +773,7 @@ _render_webhook_payload() {
         --argjson plcc_missing "$missing_count" \
         --argjson catalog_ok "$catalog_ok_count" \
         --argjson catalog_partial "$catalog_partial_count" \
-        --argjson catalog_missing "$catalogmissing_count" \
+        --argjson catalog_missing "$catalog_missing_count" \
         --argjson fully_done "${#g_results_allpassed[@]}" \
         --argjson has_catalog "$([[ -n "$g_catalog_image" ]] && echo true || echo false)" \
         --argjson show_summary "$(_webhook_has_section summary && echo true || echo false)" \
