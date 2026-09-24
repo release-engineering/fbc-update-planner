@@ -476,7 +476,13 @@ collect_results() {
         # Input order matters: lifecycle versions, bundle versions, operators.
         awk -F'\t' '
             FILENAME == ARGV[1] { lifepkg[$1] = 1; lifecycle_mm[$1 SUBSEP $2] = 1; next }
-            FILENAME == ARGV[2] { if (!seen[$1 SUBSEP $2]++) { bundle_total[$1]++; if (($1 SUBSEP $2) in lifecycle_mm) bundle_covered[$1]++ } ; next }
+            FILENAME == ARGV[2] {
+                if (!seen[$1 SUBSEP $2]++) {
+                    bundle_total[$1]++
+                    if (($1 SUBSEP $2) in lifecycle_mm) bundle_covered[$1]++
+                }
+                next
+            }
             {
                 op = $0
                 if (!(op in lifepkg)) { print "MISSING"; next }
@@ -500,7 +506,7 @@ collect_results() {
             status="${g_operator_catalog_statuses[$operator_index]}"
             _classify_operator "$name"
             if [[ "$status" == "MISSING" ]]; then
-                g_results_notincatalog+=("$name")
+                g_results_catalogmissing+=("$name")
             elif [[ "$status" == "OK" ]]; then
                 g_results_catalogok+=("$name")
             elif [[ "$status" != "-" ]]; then
@@ -556,11 +562,11 @@ print_summary() {
     if [[ -n "$g_catalog_image" ]]; then
         local catalog_ok_count=${#g_results_catalogok[@]}
         local catalog_partial_count=${#g_results_catalogpartial[@]}
-        local notincatalog_count=${#g_results_notincatalog[@]}
+        local catalogmissing_count=${#g_results_catalogmissing[@]}
         local done_count=${#g_results_allpassed[@]}
         log_info "$(printf "  %-18s %d / %d\n" "CATALOG OK:" "$catalog_ok_count" "$total")"
         log_info "$(printf "  %-18s %d / %d\n" "CATALOG PARTIAL:" "$catalog_partial_count" "$total")"
-        log_info "$(printf "  %-18s %d / %d\n" "CATALOG MISSING:" "$notincatalog_count" "$total")"
+        log_info "$(printf "  %-18s %d / %d\n" "CATALOG MISSING:" "$catalogmissing_count" "$total")"
         log_info "$(printf "  %-18s %d / %d\n" "Fully done:" "$done_count" "$total")"
     fi
 }
@@ -593,11 +599,11 @@ print_missing_lifecycle_detail() {
             # (OK), or no catalog check at all (-).
             [[ "$status" == "MISSING" || "$status" == "-" || "$status" == "OK" ]] && continue
             # Find bundle versions without matching lifecycle entries.
-            missing_versions=$(awk -F'\t' -v pkg="$name" '
+            missing_versions="$(awk -F'\t' -v pkg="$name" '
                 FILENAME == ARGV[1] && $1 == pkg { lifecycle[$2] = 1; next }
                 FILENAME == ARGV[2] && $1 == pkg && !($2 in lifecycle) { print $2 }
             ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG_BUNDLE_VERSIONS" \
-                | sort -t. -k1,1n -k2,2n | paste -sd, -)
+                | sort -t. -k1,1n -k2,2n | paste -sd, -)"
             if [[ -n "$missing_versions" ]]; then
                 log_info "  ${name}: ${missing_versions}"
                 has_entries=true
@@ -625,7 +631,7 @@ print_csv_lists() {
     if [[ -n "$g_catalog_image" ]]; then
         catalog_ok_csv="$(IFS=,; echo "${g_results_catalogok[*]:-}")"
         catalog_partial_csv="$(IFS=,; echo "${g_results_catalogpartial[*]:-}")"
-        catalog_missing_csv="$(IFS=,; echo "${g_results_notincatalog[*]:-}")"
+        catalog_missing_csv="$(IFS=,; echo "${g_results_catalogmissing[*]:-}")"
         fully_done_csv="$(IFS=,; echo "${g_results_allpassed[*]:-}")"
         log_info "- Catalog OK:${catalog_ok_csv:+ $catalog_ok_csv}"
         log_info "- Catalog partial:${catalog_partial_csv:+ $catalog_partial_csv}"
@@ -752,7 +758,7 @@ _render_webhook_payload() {
     local missing_count=${#g_results_missing[@]}
     local duplicated_count=${#g_results_duplicated[@]}
     local issues_count=${#g_results_withissues[@]}
-    local notincatalog_count=${#g_results_notincatalog[@]}
+    local catalogmissing_count=${#g_results_catalogmissing[@]}
     local catalog_ok_count=${#g_results_catalogok[@]}
     local catalog_partial_count=${#g_results_catalogpartial[@]}
 
@@ -767,7 +773,7 @@ _render_webhook_payload() {
         --argjson plcc_missing "$missing_count" \
         --argjson catalog_ok "$catalog_ok_count" \
         --argjson catalog_partial "$catalog_partial_count" \
-        --argjson catalog_missing "$notincatalog_count" \
+        --argjson catalog_missing "$catalogmissing_count" \
         --argjson fully_done "${#g_results_allpassed[@]}" \
         --argjson has_catalog "$([[ -n "$g_catalog_image" ]] && echo true || echo false)" \
         --argjson show_summary "$(_webhook_has_section summary && echo true || echo false)" \
@@ -855,7 +861,7 @@ main() {
     g_results_missing=()
     g_results_withissues=()
     g_results_duplicated=()
-    g_results_notincatalog=()
+    g_results_catalogmissing=()
     g_results_catalogok=()
     g_results_catalogpartial=()
     g_results_plccok=()
