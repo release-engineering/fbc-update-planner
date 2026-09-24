@@ -1,0 +1,45 @@
+---
+schema: olm.package
+name: operator-full
+defaultChannel: stable
+---
+schema: olm.channel
+name: stable
+package: operator-full
+entries:
+- name: operator-full.v1.0.1
+- name: operator-full.v1.1.0
+---
+schema: olm.bundle
+name: operator-full.v1.0.1
+package: operator-full
+image: registry.example.com/operator-full:v1.0.1
+properties:
+- type: olm.package
+  value:
+    packageName: operator-full
+    version: 1.0.1
+---
+schema: olm.bundle
+name: operator-full.v1.1.0
+package: operator-full
+image: registry.example.com/operator-full:v1.1.0
+properties:
+- type: olm.package
+  value:
+    packageName: operator-full
+    version: 1.1.0
+---
+schema: io.openshift.operators.lifecycles.v1alpha1
+package: operator-full
+versions:
+- name: "1.0"
+  ocpVersion: "4.14"
+  phases:
+  - name: General Availability
+    startDate: "2025-01-01"
+- name: "1.1"
+  ocpVersion: "4.15"
+  phases:
+  - name: General Availability
+    startDate: "2025-06-01"

@@ -3,11 +3,11 @@ Running plcc2fbc with 4 operators...
 Fetching catalog package list from $CATALOG_IMAGE...
 
 === Requested operators ===
-     PLCC       CATALOG  OPERATOR
-  *  OK         OK       aws-efs-csi-driver-operator
-     INVALID    MISSING  barbican-operator
-     MISSING    MISSING  totally-nonexistent-operator-xyz
-     DUPLICATE  MISSING  amq-streams
+     PLCC       CATALOG    OPERATOR
+  *  OK         OK         aws-efs-csi-driver-operator
+     INVALID    MISSING    barbican-operator
+     MISSING    MISSING    totally-nonexistent-operator-xyz
+     DUPLICATE  MISSING    amq-streams
 
 === Summary ===
   Total operators:   4
@@ -16,6 +16,7 @@ Fetching catalog package list from $CATALOG_IMAGE...
   PLCC INVALID:      1 / 4
   PLCC MISSING:      1 / 4
   CATALOG OK:        1 / 4
+  CATALOG PARTIAL:   0 / 4
   CATALOG MISSING:   3 / 4
   Fully done:        1 / 4
 
@@ -32,6 +33,8 @@ Fetching catalog package list from $CATALOG_IMAGE...
 - Duplicated: amq-streams
 - With issues: barbican-operator
 - PLCC OK: aws-efs-csi-driver-operator
+- Catalog OK: aws-efs-csi-driver-operator
+- Catalog partial:
 - Catalog missing: barbican-operator,totally-nonexistent-operator-xyz,amq-streams
 - Fully done: aws-efs-csi-driver-operator
 

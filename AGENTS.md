@@ -43,8 +43,9 @@ docs/E2E_TESTS.md             E2e test architecture, test matrix, golden file wo
 docs/RELEASING.md             Release process and version injection reference
 schema-examples/              Example PLCC + FBC schemas for reference
 scripts/plcc-check.sh         Batch runner — runs plcc2fbc against an operator list (or the full PLCC dataset if
-                               none given), optionally checks catalog presence via --catalog-image/opm, and writes
-                               summary.txt, validation.jsonl, slog.json, and the FBC/PLCC dump to an output directory
+                               none given), optionally checks catalog presence and per-version bundle coverage via
+                               --catalog-image/opm (reports OK/X/Y/MISSING), and writes summary.txt, validation.jsonl,
+                               slog.json, and the FBC/PLCC dump to an output directory
 scripts/top-operators         Example operator list for plcc-check.sh
 .goreleaser.yaml              GoReleaser config for cross-platform binary builds
 .github/workflows/tests.yaml  CI workflow — runs tests + lint on PRs to main
