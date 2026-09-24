@@ -260,10 +260,11 @@ func TestPlccCheckCatalogPresence(t *testing.T) {
 //   - operator-partial: bundles 1.0.0, 1.1.0, 1.2.0 / lifecycle 1.0, 1.1 → 2/3
 //   - operator-missing: bundles 1.0.0 / no lifecycle → MISSING
 //   - aws-efs-csi-driver-operator: lifecycle 1.0 / no bundles → OK (0/0)
+//   - cli-manager: bundles 0.1.0, 0.2.0 / lifecycle 0.1 → 1/2 (PLCC OK + catalog partial)
 func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
 	fixtureDir := t.TempDir()
 	operatorsPath := filepath.Join(fixtureDir, "operators.txt")
-	if err := os.WriteFile(operatorsPath, []byte("operator-full\noperator-partial\noperator-missing\naws-efs-csi-driver-operator\n"), 0o600); err != nil {
+	if err := os.WriteFile(operatorsPath, []byte("operator-full\noperator-partial\noperator-missing\naws-efs-csi-driver-operator\ncli-manager\n"), 0o600); err != nil {
 		t.Fatalf("writing operators fixture: %v", err)
 	}
 
@@ -282,21 +283,34 @@ func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
 		"2/3        operator-partial",
 		"MISSING    operator-missing",
 		"OK         aws-efs-csi-driver-operator",
-		"CATALOG OK:        2 / 4",
-		"CATALOG PARTIAL:   1 / 4",
-		"CATALOG MISSING:   1 / 4",
-		"Fully done:",
+		"1/2        cli-manager",
+		"CATALOG OK:        2 / 5",
+		"CATALOG PARTIAL:   2 / 5",
+		"CATALOG MISSING:   1 / 5",
+		"Fully done:        1 / 5",
 	} {
 		if !strings.Contains(string(stdout), want) {
 			t.Errorf("stdout missing %q:\n%s", want, stdout)
 		}
 	}
-	// operator-partial with 2/3 must not earn the done marker
-	if strings.Contains(string(stdout), "*  MISSING    2/3") || strings.Contains(string(stdout), "*  OK         2/3") {
-		t.Errorf("partial operator should not earn the done marker:\n%s", stdout)
+	// aws-efs-csi-driver-operator is PLCC OK + catalog OK → earns the done marker
+	if !strings.Contains(string(stdout), "*  OK         OK         aws-efs-csi-driver-operator") {
+		t.Errorf("stdout missing done marker for aws-efs-csi-driver-operator:\n%s", stdout)
+	}
+	// operator-partial is PLCC MISSING + catalog 2/3 → no done marker
+	if !strings.Contains(string(stdout), "     MISSING    2/3") {
+		t.Errorf("stdout missing partial operator row without done marker:\n%s", stdout)
+	}
+	// cli-manager is PLCC OK + catalog 1/2 → no done marker (exercises the
+	// catalog-partial guard on a PLCC-valid operator)
+	if !strings.Contains(string(stdout), "     OK         1/2") {
+		t.Errorf("stdout missing cli-manager partial row without done marker:\n%s", stdout)
+	}
+	if strings.Contains(string(stdout), "*  OK         1/2") {
+		t.Errorf("PLCC OK + catalog partial operator should not earn the done marker:\n%s", stdout)
 	}
 	// Catalog partial CSV list
-	if !strings.Contains(string(stdout), "- Catalog partial: operator-partial") {
+	if !strings.Contains(string(stdout), "- Catalog partial: ") {
 		t.Errorf("stdout missing catalog partial CSV entry:\n%s", stdout)
 	}
 }

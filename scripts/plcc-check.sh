@@ -502,9 +502,9 @@ collect_results() {
             if [[ "$status" == "MISSING" ]]; then
                 g_results_notincatalog+=("$name")
             elif [[ "$status" == "OK" ]]; then
-                g_results_catalog_ok+=("$name")
+                g_results_catalogok+=("$name")
             elif [[ "$status" != "-" ]]; then
-                g_results_catalog_partial+=("$name")
+                g_results_catalogpartial+=("$name")
             fi
             if [[ "$g_classify_result" == "passed" ]]; then
                 g_results_plccok+=("$name")
@@ -554,8 +554,8 @@ print_summary() {
     log_info "$(printf "  %-18s %d / %d\n" "PLCC INVALID:" "$issues_count" "$total")"
     log_info "$(printf "  %-18s %d / %d\n" "PLCC MISSING:" "$missing_count" "$total")"
     if [[ -n "$g_catalog_image" ]]; then
-        local catalog_ok_count=${#g_results_catalog_ok[@]}
-        local catalog_partial_count=${#g_results_catalog_partial[@]}
+        local catalog_ok_count=${#g_results_catalogok[@]}
+        local catalog_partial_count=${#g_results_catalogpartial[@]}
         local notincatalog_count=${#g_results_notincatalog[@]}
         local done_count=${#g_results_allpassed[@]}
         log_info "$(printf "  %-18s %d / %d\n" "CATALOG OK:" "$catalog_ok_count" "$total")"
@@ -579,7 +579,7 @@ print_issues_detail() {
 
 print_csv_lists() {
     local missing_csv duplicated_csv issues_csv plcc_ok_csv
-    local catalog_missing_csv fully_done_csv
+    local catalog_ok_csv catalog_partial_csv catalog_missing_csv fully_done_csv
     missing_csv="$(IFS=,; echo "${g_results_missing[*]:-}")"
     duplicated_csv="$(IFS=,; echo "${g_results_duplicated[*]:-}")"
     issues_csv="$(IFS=,; echo "${g_results_withissues[*]:-}")"
@@ -591,9 +591,8 @@ print_csv_lists() {
     log_info "- With issues:${issues_csv:+ $issues_csv}"
     log_info "- PLCC OK:${plcc_ok_csv:+ $plcc_ok_csv}"
     if [[ -n "$g_catalog_image" ]]; then
-        local catalog_ok_csv catalog_partial_csv
-        catalog_ok_csv="$(IFS=,; echo "${g_results_catalog_ok[*]:-}")"
-        catalog_partial_csv="$(IFS=,; echo "${g_results_catalog_partial[*]:-}")"
+        catalog_ok_csv="$(IFS=,; echo "${g_results_catalogok[*]:-}")"
+        catalog_partial_csv="$(IFS=,; echo "${g_results_catalogpartial[*]:-}")"
         catalog_missing_csv="$(IFS=,; echo "${g_results_notincatalog[*]:-}")"
         fully_done_csv="$(IFS=,; echo "${g_results_allpassed[*]:-}")"
         log_info "- Catalog OK:${catalog_ok_csv:+ $catalog_ok_csv}"
@@ -722,8 +721,8 @@ _render_webhook_payload() {
     local duplicated_count=${#g_results_duplicated[@]}
     local issues_count=${#g_results_withissues[@]}
     local notincatalog_count=${#g_results_notincatalog[@]}
-    local catalog_ok_count=${#g_results_catalog_ok[@]}
-    local catalog_partial_count=${#g_results_catalog_partial[@]}
+    local catalog_ok_count=${#g_results_catalogok[@]}
+    local catalog_partial_count=${#g_results_catalogpartial[@]}
 
     jq -n \
         --arg heading "$heading" \
@@ -757,7 +756,7 @@ _render_webhook_payload() {
             status("PLCC duplicate"; $plcc_duplicate),
             status("PLCC invalid"; $plcc_invalid),
             status("PLCC missing"; $plcc_missing)
-          ] + (if $has_catalog then [status("Catalog present"; $catalog_ok), status("Catalog partial"; $catalog_partial), status("Catalog missing"; $catalog_missing)] else [] end)) | join("\n");
+          ] + (if $has_catalog then [status("Catalog OK"; $catalog_ok), status("Catalog partial"; $catalog_partial), status("Catalog missing"; $catalog_missing)] else [] end)) | join("\n");
         {
           text: ($heading + ". " + $url),
           blocks: (
@@ -825,8 +824,8 @@ main() {
     g_results_withissues=()
     g_results_duplicated=()
     g_results_notincatalog=()
-    g_results_catalog_ok=()
-    g_results_catalog_partial=()
+    g_results_catalogok=()
+    g_results_catalogpartial=()
     g_results_plccok=()
     g_results_allpassed=()
     g_operator_catalog_statuses=()

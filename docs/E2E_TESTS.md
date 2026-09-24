@@ -42,8 +42,8 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | Test | Mode | What It Verifies |
 |------|------|-------------------|
 | `TestPlccCheckOperatorsFile` | `plcc-check-operators.txt` (4 packages: pass/issues/missing/duplicate) | `summary.txt`, `validation.jsonl`, `fbc-output.yaml`, and `slog.json` message sequence match golden fixtures |
-| `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING/X/Y statuses, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture |
-| `TestPlccCheckCatalogVersionCoverage` | 4-operator file + `--catalog-image testdata/catalog-fbc-versions` | Per-version coverage: full coverage → `OK`, partial → `X/Y`, no lifecycle → `MISSING`, no bundles → `OK`; CATALOG PARTIAL summary line; done marker only on full OK |
+| `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING statuses, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture |
+| `TestPlccCheckCatalogVersionCoverage` | 5-operator file + `--catalog-image testdata/catalog-fbc-versions` | Per-version coverage: full coverage → `OK`, partial → `X/Y`, no lifecycle → `MISSING`, no bundles → `OK`; PLCC OK + catalog partial → no done marker; CATALOG PARTIAL summary line; done marker only on full OK |
 | `TestPlccCheckWebhook` | `--webhook list`, `summary`, and `summary,list` | Slack payload contains exactly the selected Markdown sections, catalog-ready indicators (including partial), and workflow link |
 | `TestPlccCheckWebhookRejectsUnknownSection` | invalid `--webhook` section | Unsupported webhook sections fail before the assessment runs |
 | `TestPlccCheckAllPackages` | no operators file (full dataset), `--validators none` | `fbc-output.yaml` matches `reference-fbc.yaml` byte-for-byte; `summary.txt` reports the expected pass/fail counts |
@@ -62,7 +62,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `plcc-check/operators-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckOperatorsFile`. The output directory's absolute path is normalized to `$OUTDIR` before comparison, since it's a fresh `t.TempDir()` on every run. |
 | `plcc-check/operators-validation.jsonl` | ~400 B | Expected `validation.jsonl` for `TestPlccCheckOperatorsFile`. |
 | `catalog-fbc/` | ~150 B | Local FBC directory fixture for `TestPlccCheckCatalogPresence`: contains lifecycle data for `aws-efs-csi-driver-operator` only (no bundles), so `opm render` against it exercises a catalog-hit (OK, zero bundles) and catalog-misses. |
-| `catalog-fbc-versions/` | ~2 KB | Local FBC directory fixture for `TestPlccCheckCatalogVersionCoverage`: contains lifecycle + `olm.bundle` entries for four operators covering full coverage (OK), partial coverage (X/Y), no lifecycle (MISSING), and no bundles (OK). |
+| `catalog-fbc-versions/` | ~2 KB | Local FBC directory fixture for `TestPlccCheckCatalogVersionCoverage`: contains lifecycle + `olm.bundle` entries for five operators covering full coverage (OK), partial coverage (X/Y), no lifecycle (MISSING), no bundles (OK), and PLCC OK + catalog partial (exercises the done-marker guard). |
 | `plcc-check/catalog-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckCatalogPresence`. Both `$OUTDIR` and the `--catalog-image` path are normalized before comparison. |
 
 ---
