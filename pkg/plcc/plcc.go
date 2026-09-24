@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/avast/retry-go/v4"
+	"github.com/avast/retry-go/v5"
 )
 
 // PackagesNotFoundError is returned when requested package names are not found in the catalog.
@@ -117,9 +117,9 @@ var retryOptions = []retry.Option{
 // FetchFrom retrieves the product catalog from the given URL using the provided HTTP client.
 // It makes up to 3 attempts with exponential backoff on errors.
 func FetchFrom(url string, client *http.Client) (*Catalog, error) {
-	catalog, err := retry.DoWithData(func() (*Catalog, error) {
+	catalog, err := retry.NewWithData[*Catalog](retryOptions...).Do(func() (*Catalog, error) {
 		return fetch(url, client)
-	}, retryOptions...)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("after retries: %w", err)
 	}

@@ -25,14 +25,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/avast/retry-go/v4"
+	"github.com/avast/retry-go/v5"
 )
 
 func TestPackages(t *testing.T) {
 	tests := []struct {
-		name    string
-		pkg     string
-		want    []string
+		name string
+		pkg  string
+		want []string
 	}{
 		{"single name", "alpha", []string{"alpha"}},
 		{"simple pair", "alpha,beta", []string{"alpha", "beta"}},
@@ -104,7 +104,6 @@ func TestFormatDate(t *testing.T) {
 		t.Errorf("got %q, want %q", got, "2025-03-05")
 	}
 }
-
 
 func TestDropWithoutPackageName(t *testing.T) {
 	c := &Catalog{Data: []Product{
@@ -369,4 +368,3 @@ func TestFetchFromRetry(t *testing.T) {
 		t.Errorf("got package %q, want %q", got.Data[0].Package, "retry-pkg")
 	}
 }
-
