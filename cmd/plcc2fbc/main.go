@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
+	"github.com/release-engineering/fbc-update-planner/pkg/classify"
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
@@ -64,6 +66,8 @@ func run() (err error) {
 	var listValidators bool
 	var split bool
 	var showVersion bool
+	var reportMode bool
+	var catalogDataPath string
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
 	flag.StringVarP(&logPath, "log", "l", "", "write validation/filtering report to a file; parent directory must exist (default: stderr)")
@@ -76,6 +80,8 @@ func run() (err error) {
 	flag.BoolVar(&listValidators, "list-validators", false, "list available validators and exit")
 	flag.BoolVar(&split, "split", false, "write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+	flag.BoolVar(&reportMode, "report", false, "classify catalog lifecycle gaps instead of generating FBC; requires --catalog-data")
+	flag.StringVar(&catalogDataPath, "catalog-data", "", "path to catalog data JSON file (used with --report)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
@@ -95,6 +101,18 @@ func run() (err error) {
 
 	if dumpPLCC && split {
 		return fmt.Errorf("--dump-plcc and --split are mutually exclusive")
+	}
+	if reportMode && dumpPLCC {
+		return fmt.Errorf("--report and --dump-plcc are mutually exclusive")
+	}
+	if reportMode && split {
+		return fmt.Errorf("--report and --split are mutually exclusive")
+	}
+	if reportMode && catalogDataPath == "" {
+		return fmt.Errorf("--report requires --catalog-data")
+	}
+	if !reportMode && catalogDataPath != "" {
+		return fmt.Errorf("--catalog-data requires --report")
 	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
@@ -125,6 +143,20 @@ func run() (err error) {
 	writePath := flag.Arg(0)
 	if err := validateOutputPath(writePath, split); err != nil {
 		return fmt.Errorf("invalid output path: %w", err)
+	}
+
+	if reportMode {
+		// Report mode loads the raw catalog without filtering: the
+		// classify package runs its own per-version validation to
+		// distinguish "Fix PLCC" from "Needs rebuild".
+		rawCatalog, loadErr := loadCatalog(inputPath)
+		if loadErr != nil {
+			return loadErr
+		}
+		rawCatalog.DropWithoutPackageName()
+		rawCatalog.ExpandPackages()
+		rawCatalog.SortByPackage()
+		return runReport(rawCatalog, catalogDataPath, validatorsFlag, packages, writePath)
 	}
 
 	var writer fbc.PackageWriter
@@ -341,6 +373,108 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	}
 
 	return catalog, nil
+}
+
+// catalogDataFile is the JSON structure written by the shell script and
+// read by --report. It captures the two maps that plcc-check.sh already
+// computes via jq from `opm render` output: lifecycle versions and bundle
+// versions, both keyed by package name.
+type catalogDataFile struct {
+	LifecycleVersions map[string][]string `json:"lifecycleVersions"`
+	BundleVersions    map[string][]string `json:"bundleVersions"`
+}
+
+func loadCatalog(inputPath string) (*plcc.Catalog, error) {
+	if inputPath != "" {
+		return plcc.Load(inputPath)
+	}
+	return plcc.Fetch()
+}
+
+func loadCatalogData(path string) (*classify.CatalogData, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading catalog data: %w", err)
+	}
+	var cdf catalogDataFile
+	if err := json.Unmarshal(data, &cdf); err != nil {
+		return nil, fmt.Errorf("decoding catalog data: %w", err)
+	}
+
+	cd := &classify.CatalogData{
+		LifecycleVersions: make(map[string]map[string]bool),
+		BundleVersions:    make(map[string]map[string]bool),
+	}
+	for pkg, versions := range cdf.LifecycleVersions {
+		cd.LifecycleVersions[pkg] = make(map[string]bool, len(versions))
+		for _, v := range versions {
+			cd.LifecycleVersions[pkg][v] = true
+		}
+	}
+	for pkg, versions := range cdf.BundleVersions {
+		cd.BundleVersions[pkg] = make(map[string]bool, len(versions))
+		for _, v := range versions {
+			cd.BundleVersions[pkg][v] = true
+		}
+	}
+	return cd, nil
+}
+
+func runReport(catalog *plcc.Catalog, catalogDataPath, validatorsFlag, packages, writePath string) error {
+	cd, err := loadCatalogData(catalogDataPath)
+	if err != nil {
+		return err
+	}
+
+	// Resolve validators from the flag value, matching the run's policy.
+	var validatorNames []string
+	for _, name := range strings.Split(validatorsFlag, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			validatorNames = append(validatorNames, name)
+		}
+	}
+	validators, catalogValidators, err := catalog.LookupValidators(validatorNames...)
+	if err != nil {
+		return fmt.Errorf("invalid --validators flag: %w", err)
+	}
+
+	var pkgList []string
+	if packages != "" {
+		for _, name := range strings.Split(packages, ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				pkgList = append(pkgList, name)
+			}
+		}
+	}
+
+	reports := classify.Classify(classify.Input{
+		Catalog:           catalog,
+		CatalogData:       cd,
+		Packages:          pkgList,
+		Validators:        validators,
+		CatalogValidators: catalogValidators,
+	})
+
+	f, err := os.Create(writePath)
+	if err != nil {
+		return fmt.Errorf("creating report file: %w", err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(reports); err != nil {
+		return fmt.Errorf("writing report: %w", err)
+	}
+
+	slog.Info("wrote classification report", "count", len(reports), "path", writePath)
+	return nil
 }
 
 func validateOutputPath(path string, isDir bool) error {
