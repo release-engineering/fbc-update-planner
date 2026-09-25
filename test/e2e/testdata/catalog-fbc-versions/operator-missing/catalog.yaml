@@ -1,0 +1,20 @@
+---
+schema: olm.package
+name: operator-missing
+defaultChannel: stable
+---
+schema: olm.channel
+name: stable
+package: operator-missing
+entries:
+- name: operator-missing.v1.0.0
+---
+schema: olm.bundle
+name: operator-missing.v1.0.0
+package: operator-missing
+image: registry.example.com/operator-missing:v1.0.0
+properties:
+- type: olm.package
+  value:
+    packageName: operator-missing
+    version: 1.0.0

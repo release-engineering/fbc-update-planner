@@ -253,6 +253,85 @@ func TestPlccCheckCatalogPresence(t *testing.T) {
 	}
 }
 
+// TestPlccCheckCatalogVersionCoverage verifies that --catalog-image checks
+// per-version coverage of shipped bundle versions against lifecycle entries.
+// The fixture directory testdata/catalog-fbc-versions provides five operators
+// covering each catalog status: full bundle coverage (OK), partial coverage
+// (X/Y), no lifecycle entry (MISSING), lifecycle-only with no bundles (OK),
+// and a PLCC-valid operator with partial catalog coverage (exercises the
+// done-marker guard). Synthetic operator names (operator-full, operator-partial,
+// operator-missing) are intentionally absent from testdata/plcc.json so their
+// PLCC status is MISSING, isolating the catalog coverage logic under test.
+func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
+	fixtureDir := t.TempDir()
+	operatorsPath := filepath.Join(fixtureDir, "operators.txt")
+	if err := os.WriteFile(operatorsPath, []byte("operator-full\noperator-partial\noperator-missing\naws-efs-csi-driver-operator\ncli-manager\n"), 0o600); err != nil {
+		t.Fatalf("writing operators fixture: %v", err)
+	}
+
+	outDir := t.TempDir()
+	stdout, stderr, exitCode := runPlccCheck(t,
+		"-i", "testdata/plcc.json",
+		"-o", outDir,
+		"--catalog-image", "testdata/catalog-fbc-versions",
+		operatorsPath,
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code %d; stderr:\n%s", exitCode, stderr)
+	}
+	for _, want := range []string{
+		"OK         operator-full",
+		"2/3        operator-partial",
+		"MISSING    operator-missing",
+		"OK         aws-efs-csi-driver-operator",
+		"1/2        cli-manager",
+		"CATALOG OK:        2 / 5",
+		"CATALOG PARTIAL:   2 / 5",
+		"CATALOG MISSING:   1 / 5",
+		"Fully done:        1 / 5",
+	} {
+		if !strings.Contains(string(stdout), want) {
+			t.Errorf("stdout missing %q:\n%s", want, stdout)
+		}
+	}
+	// aws-efs-csi-driver-operator is PLCC OK + catalog OK → earns the done marker
+	if !strings.Contains(string(stdout), "*  OK         OK         aws-efs-csi-driver-operator") {
+		t.Errorf("stdout missing done marker for aws-efs-csi-driver-operator:\n%s", stdout)
+	}
+	// operator-partial is PLCC MISSING + catalog 2/3 → no done marker
+	if !strings.Contains(string(stdout), "     MISSING    2/3") {
+		t.Errorf("stdout missing partial operator row without done marker:\n%s", stdout)
+	}
+	// cli-manager is PLCC OK + catalog 1/2 → no done marker (exercises the
+	// catalog-partial guard on a PLCC-valid operator)
+	if !strings.Contains(string(stdout), "     OK         1/2") {
+		t.Errorf("stdout missing cli-manager partial row without done marker:\n%s", stdout)
+	}
+	if strings.Contains(string(stdout), "*  OK         1/2") {
+		t.Errorf("PLCC OK + catalog partial operator should not earn the done marker:\n%s", stdout)
+	}
+	// Missing lifecycle versions section
+	if !strings.Contains(string(stdout), "=== Missing lifecycle versions ===") {
+		t.Errorf("stdout missing 'Missing lifecycle versions' section:\n%s", stdout)
+	}
+	for _, want := range []string{
+		"  cli-manager: 0.2",
+		"  operator-partial: 1.2",
+	} {
+		if !strings.Contains(string(stdout), want) {
+			t.Errorf("stdout missing missing-lifecycle entry %q:\n%s", want, stdout)
+		}
+	}
+	// operator-missing has MISSING status → should not appear in missing lifecycle section
+	if strings.Contains(string(stdout), "  operator-missing:") {
+		t.Errorf("operator-missing should be skipped in missing lifecycle versions (no lifecycle data):\n%s", stdout)
+	}
+	// Catalog partial CSV list
+	if !strings.Contains(string(stdout), "- Catalog partial: ") {
+		t.Errorf("stdout missing catalog partial CSV entry:\n%s", stdout)
+	}
+}
+
 // TestPlccCheckCatalogEmptyPackageName is a regression test for a bash
 // pitfall in fetch_catalog_packages: its final statement used to be a bare
 // "[[ -n "$name" ]] && arr+=(...)" with nothing after it. Under "set -e",
@@ -394,6 +473,9 @@ func TestPlccCheckWebhook(t *testing.T) {
 			if tc.catalog && tc.wantSummary && !strings.Contains(summary, "*Ready in PLCC and catalog:") {
 				t.Errorf("summary is missing the highlighted ready result: %q", summary)
 			}
+			if tc.catalog && tc.wantSummary && !strings.Contains(summary, "Catalog partial:") {
+				t.Errorf("summary is missing the catalog partial status: %q", summary)
+			}
 			if !tc.wantList {
 				if tc.wantSummary && tc.catalog && !strings.Contains(string(data), "Operators ready in PLCC and catalog") {
 					t.Error("summary-only catalog payload is missing the ready operator list")
@@ -514,12 +596,13 @@ func TestPlccCheckSurfacesStaleCatalogPackage(t *testing.T) {
 		t.Fatalf("exit code %d; stderr:\n%s", exitCode, stderr)
 	}
 	for _, want := range []string{
-		"MISSING    OK       stale-operator",
+		"MISSING    OK         stale-operator",
 		"Total operators:   2",
 		"PLCC MISSING:      1 / 2",
 		"PLCC INVALID:      1 / 2",
 		"PLCC OK:           0 / 2",
 		"CATALOG OK:        1 / 2",
+		"CATALOG PARTIAL:   0 / 2",
 		"CATALOG MISSING:   1 / 2",
 	} {
 		if !strings.Contains(string(stdout), want) {

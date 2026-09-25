@@ -1,0 +1,56 @@
+---
+schema: olm.package
+name: operator-partial
+defaultChannel: stable
+---
+schema: olm.channel
+name: stable
+package: operator-partial
+entries:
+- name: operator-partial.v1.0.0
+- name: operator-partial.v1.1.0
+- name: operator-partial.v1.2.0
+---
+schema: olm.bundle
+name: operator-partial.v1.0.0
+package: operator-partial
+image: registry.example.com/operator-partial:v1.0.0
+properties:
+- type: olm.package
+  value:
+    packageName: operator-partial
+    version: 1.0.0
+---
+schema: olm.bundle
+name: operator-partial.v1.1.0
+package: operator-partial
+image: registry.example.com/operator-partial:v1.1.0
+properties:
+- type: olm.package
+  value:
+    packageName: operator-partial
+    version: 1.1.0
+---
+schema: olm.bundle
+name: operator-partial.v1.2.0
+package: operator-partial
+image: registry.example.com/operator-partial:v1.2.0
+properties:
+- type: olm.package
+  value:
+    packageName: operator-partial
+    version: 1.2.0
+---
+schema: io.openshift.operators.lifecycles.v1alpha1
+package: operator-partial
+versions:
+- name: "1.0"
+  ocpVersion: "4.14"
+  phases:
+  - name: General Availability
+    startDate: "2025-01-01"
+- name: "1.1"
+  ocpVersion: "4.15"
+  phases:
+  - name: General Availability
+    startDate: "2025-06-01"

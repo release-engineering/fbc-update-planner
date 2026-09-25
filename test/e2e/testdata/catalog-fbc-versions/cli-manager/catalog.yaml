@@ -1,0 +1,40 @@
+---
+schema: olm.package
+name: cli-manager
+defaultChannel: stable
+---
+schema: olm.channel
+name: stable
+package: cli-manager
+entries:
+- name: cli-manager.v0.1.0
+- name: cli-manager.v0.2.0
+---
+schema: olm.bundle
+name: cli-manager.v0.1.0
+package: cli-manager
+image: registry.example.com/cli-manager:v0.1.0
+properties:
+- type: olm.package
+  value:
+    packageName: cli-manager
+    version: 0.1.0
+---
+schema: olm.bundle
+name: cli-manager.v0.2.0
+package: cli-manager
+image: registry.example.com/cli-manager:v0.2.0
+properties:
+- type: olm.package
+  value:
+    packageName: cli-manager
+    version: 0.2.0
+---
+schema: io.openshift.operators.lifecycles.v1alpha1
+package: cli-manager
+versions:
+- name: "0.1"
+  ocpVersion: "4.17"
+  phases:
+  - name: Full support
+    startDate: "2024-11-19"

@@ -45,7 +45,10 @@ Options:
   --validators <v>   Comma-separated validators to run (passed through to plcc2fbc;
                      use "none" to skip PLCC validation entirely)
   --catalog-image <ref>  Also check whether each operator's FBC lifecycle data is
-                     present in the given OCP catalog image. Off by default; requires opm.
+                     present in the given OCP catalog image and that every shipped
+                     bundle version (MAJOR.MINOR) has a matching lifecycle entry.
+                     Reports OK (all covered or no bundles), X/Y (partial), or MISSING
+                     (no lifecycle entry at all). Off by default; requires opm.
   --webhook <sections>  Write a Slack webhook payload to <dir>/slack-payload.json.
                      Supported sections: summary,list (comma-separated).
   -h                 Show this help
@@ -278,6 +281,30 @@ fetch_catalog_packages() {
         [[ -z "$name" ]] && continue
         g_catalog_packages+=("$name")
     done < "$FILE_CATALOG"
+
+    # Extract lifecycle versions: package<TAB>MAJOR.MINOR from lifecycle entries.
+    jq -r '
+        select(.schema == "io.openshift.operators.lifecycles.v1alpha1")
+        | (.package // empty) as $p
+        | select($p != "")
+        | (.versions[]?.name // empty) as $n
+        | select($n != "")
+        | "\($p)\t\($n)"
+    ' "$WORK_DIR/catalog-render.json" | sort -u >"$FILE_CATALOG_LIFECYCLE_VERSIONS"
+
+    # Extract bundle versions: package<TAB>MAJOR.MINOR from olm.bundle objects.
+    # Truncate the full semver to MAJOR.MINOR for comparison.
+    jq -r '
+        select(.schema == "olm.bundle")
+        | . as $b
+        | ($b.properties[]? | select(.type == "olm.package") | .value.version // empty) as $v
+        | select($v != "")
+        | ($b.package // empty) as $p
+        | select($p != "")
+        | "\($p)\t\($v)"
+    ' "$WORK_DIR/catalog-render.json" \
+        | sed 's/\t\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\t\1.\2/' \
+        | sort -u >"$FILE_CATALOG_BUNDLE_VERSIONS"
 }
 
 # Filters sorted package names from stdin to the selected operator set. In
@@ -438,16 +465,33 @@ collect_results() {
 
     _derive_operators_from_output
 
-    # Build catalog membership once with awk's associative array, then retain
-    # an index-aligned status array for O(1) reuse by every renderer.
+    # Build catalog status once with awk, then retain an index-aligned status
+    # array for O(1) reuse by every renderer.
     : > "$FILE_OPERATORS"
     if [[ ${#g_operators[@]} -gt 0 ]]; then
         printf '%s\n' "${g_operators[@]}" > "$FILE_OPERATORS"
     fi
     if [[ -n "$g_catalog_image" ]]; then
-        awk 'FILENAME == ARGV[1] { catalog[$0] = 1; next }
-             { print (($0 in catalog) ? "OK" : "MISSING") }' \
-            "$FILE_CATALOG" "$FILE_OPERATORS" > "$FILE_CATALOG_STATUS"
+        # Compute per-operator catalog status: OK, MISSING, or X/Y.
+        # Input order matters: lifecycle versions, bundle versions, operators.
+        awk -F'\t' '
+            FILENAME == ARGV[1] { lifepkg[$1] = 1; lifecycle_mm[$1 SUBSEP $2] = 1; next }
+            FILENAME == ARGV[2] {
+                if (!seen[$1 SUBSEP $2]++) {
+                    bundle_total[$1]++
+                    if (($1 SUBSEP $2) in lifecycle_mm) bundle_covered[$1]++
+                }
+                next
+            }
+            {
+                op = $0
+                if (!(op in lifepkg)) { print "MISSING"; next }
+                total = bundle_total[op] + 0; covered = bundle_covered[op] + 0
+                if (total == 0 || covered == total) { print "OK" }
+                else { print covered "/" total }
+            }
+        ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG_BUNDLE_VERSIONS" "$FILE_OPERATORS" \
+            > "$FILE_CATALOG_STATUS"
     else
         awk '{ print "-" }' "$FILE_OPERATORS" > "$FILE_CATALOG_STATUS"
     fi
@@ -462,11 +506,15 @@ collect_results() {
             status="${g_operator_catalog_statuses[$operator_index]}"
             _classify_operator "$name"
             if [[ "$status" == "MISSING" ]]; then
-                g_results_notincatalog+=("$name")
+                g_results_catalogmissing+=("$name")
+            elif [[ "$status" == "OK" ]]; then
+                g_results_catalogok+=("$name")
+            elif [[ "$status" != "-" ]]; then
+                g_results_catalogpartial+=("$name")
             fi
             if [[ "$g_classify_result" == "passed" ]]; then
                 g_results_plccok+=("$name")
-                if [[ "$status" != "MISSING" ]]; then
+                if [[ -z "$g_catalog_image" || "$status" == "OK" ]]; then
                     g_results_allpassed+=("$name")
                 fi
             fi
@@ -478,7 +526,7 @@ print_operator_list() {
     log_info ""
     log_info "=== Requested operators ==="
     if [[ -n "$g_catalog_image" ]]; then
-        log_info "$(printf "  %-1s  %-9s  %-7s  %s\n" " " "PLCC" "CATALOG" "OPERATOR")"
+        log_info "$(printf "  %-1s  %-9s  %-9s  %s\n" " " "PLCC" "CATALOG" "OPERATOR")"
     else
         log_info "$(printf "  %-1s  %-9s  %s\n" " " "PLCC" "OPERATOR")"
     fi
@@ -488,7 +536,7 @@ print_operator_list() {
             name="${g_operators[$operator_index]}"
             _check_marks "$name" "${g_operator_catalog_statuses[$operator_index]}"
             if [[ -n "$g_catalog_image" ]]; then
-                log_info "$(printf "  %-1s  %-9s  %-7s  %s\n" \
+                log_info "$(printf "  %-1s  %-9s  %-9s  %s\n" \
                     "$g_mark_done" "$g_mark_plcc" "$g_mark_catalog" "$name")"
             else
                 log_info "$(printf "  %-1s  %-9s  %s\n" \
@@ -512,11 +560,13 @@ print_summary() {
     log_info "$(printf "  %-18s %d / %d\n" "PLCC INVALID:" "$issues_count" "$total")"
     log_info "$(printf "  %-18s %d / %d\n" "PLCC MISSING:" "$missing_count" "$total")"
     if [[ -n "$g_catalog_image" ]]; then
-        local notincatalog_count=${#g_results_notincatalog[@]}
-        local catalog_ok_count=$((total - notincatalog_count))
+        local catalog_ok_count=${#g_results_catalogok[@]}
+        local catalog_partial_count=${#g_results_catalogpartial[@]}
+        local catalog_missing_count=${#g_results_catalogmissing[@]}
         local done_count=${#g_results_allpassed[@]}
         log_info "$(printf "  %-18s %d / %d\n" "CATALOG OK:" "$catalog_ok_count" "$total")"
-        log_info "$(printf "  %-18s %d / %d\n" "CATALOG MISSING:" "$notincatalog_count" "$total")"
+        log_info "$(printf "  %-18s %d / %d\n" "CATALOG PARTIAL:" "$catalog_partial_count" "$total")"
+        log_info "$(printf "  %-18s %d / %d\n" "CATALOG MISSING:" "$catalog_missing_count" "$total")"
         log_info "$(printf "  %-18s %d / %d\n" "Fully done:" "$done_count" "$total")"
     fi
 }
@@ -533,9 +583,41 @@ print_issues_detail() {
     fi
 }
 
+print_missing_lifecycle_detail() {
+    [[ -n "$g_catalog_image" ]] || return 0
+
+    log_info ""
+    log_info "=== Missing lifecycle versions ==="
+
+    local has_entries=false
+    if [[ ${#g_operators[@]} -gt 0 ]]; then
+        local operator_index name status missing_versions
+        for operator_index in "${!g_operators[@]}"; do
+            name="${g_operators[$operator_index]}"
+            status="${g_operator_catalog_statuses[$operator_index]}"
+            # Skip operators with no lifecycle data (MISSING), full coverage
+            # (OK), or no catalog check at all (-).
+            [[ "$status" == "MISSING" || "$status" == "-" || "$status" == "OK" ]] && continue
+            # Find bundle versions without matching lifecycle entries.
+            missing_versions="$(awk -F'\t' -v pkg="$name" '
+                FILENAME == ARGV[1] && $1 == pkg { lifecycle[$2] = 1; next }
+                FILENAME == ARGV[2] && $1 == pkg && !($2 in lifecycle) { print $2 }
+            ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG_BUNDLE_VERSIONS" \
+                | sort -t. -k1,1n -k2,2n | paste -sd, -)"
+            if [[ -n "$missing_versions" ]]; then
+                log_info "  ${name}: ${missing_versions}"
+                has_entries=true
+            fi
+        done
+    fi
+    if ! $has_entries; then
+        log_info "  (none)"
+    fi
+}
+
 print_csv_lists() {
     local missing_csv duplicated_csv issues_csv plcc_ok_csv
-    local catalog_missing_csv fully_done_csv
+    local catalog_ok_csv catalog_partial_csv catalog_missing_csv fully_done_csv
     missing_csv="$(IFS=,; echo "${g_results_missing[*]:-}")"
     duplicated_csv="$(IFS=,; echo "${g_results_duplicated[*]:-}")"
     issues_csv="$(IFS=,; echo "${g_results_withissues[*]:-}")"
@@ -547,8 +629,12 @@ print_csv_lists() {
     log_info "- With issues:${issues_csv:+ $issues_csv}"
     log_info "- PLCC OK:${plcc_ok_csv:+ $plcc_ok_csv}"
     if [[ -n "$g_catalog_image" ]]; then
-        catalog_missing_csv="$(IFS=,; echo "${g_results_notincatalog[*]:-}")"
+        catalog_ok_csv="$(IFS=,; echo "${g_results_catalogok[*]:-}")"
+        catalog_partial_csv="$(IFS=,; echo "${g_results_catalogpartial[*]:-}")"
+        catalog_missing_csv="$(IFS=,; echo "${g_results_catalogmissing[*]:-}")"
         fully_done_csv="$(IFS=,; echo "${g_results_allpassed[*]:-}")"
+        log_info "- Catalog OK:${catalog_ok_csv:+ $catalog_ok_csv}"
+        log_info "- Catalog partial:${catalog_partial_csv:+ $catalog_partial_csv}"
         log_info "- Catalog missing:${catalog_missing_csv:+ $catalog_missing_csv}"
         log_info "- Fully done:${fully_done_csv:+ $fully_done_csv}"
     fi
@@ -672,7 +758,9 @@ _render_webhook_payload() {
     local missing_count=${#g_results_missing[@]}
     local duplicated_count=${#g_results_duplicated[@]}
     local issues_count=${#g_results_withissues[@]}
-    local notincatalog_count=${#g_results_notincatalog[@]}
+    local catalog_missing_count=${#g_results_catalogmissing[@]}
+    local catalog_ok_count=${#g_results_catalogok[@]}
+    local catalog_partial_count=${#g_results_catalogpartial[@]}
 
     jq -n \
         --arg heading "$heading" \
@@ -683,8 +771,9 @@ _render_webhook_payload() {
         --argjson plcc_duplicate "$duplicated_count" \
         --argjson plcc_invalid "$issues_count" \
         --argjson plcc_missing "$missing_count" \
-        --argjson catalog_ok "$((total - notincatalog_count))" \
-        --argjson catalog_missing "$notincatalog_count" \
+        --argjson catalog_ok "$catalog_ok_count" \
+        --argjson catalog_partial "$catalog_partial_count" \
+        --argjson catalog_missing "$catalog_missing_count" \
         --argjson fully_done "${#g_results_allpassed[@]}" \
         --argjson has_catalog "$([[ -n "$g_catalog_image" ]] && echo true || echo false)" \
         --argjson show_summary "$(_webhook_has_section summary && echo true || echo false)" \
@@ -705,7 +794,7 @@ _render_webhook_payload() {
             status("PLCC duplicate"; $plcc_duplicate),
             status("PLCC invalid"; $plcc_invalid),
             status("PLCC missing"; $plcc_missing)
-          ] + (if $has_catalog then [status("Catalog present"; $catalog_ok), status("Catalog missing"; $catalog_missing)] else [] end)) | join("\n");
+          ] + (if $has_catalog then [status("Catalog OK"; $catalog_ok), status("Catalog partial"; $catalog_partial), status("Catalog missing"; $catalog_missing)] else [] end)) | join("\n");
         {
           text: ($heading + ". " + $url),
           blocks: (
@@ -751,6 +840,8 @@ main() {
     FILE_VAL="$WORK_DIR/validation.jsonl"
     FILE_SUM="$WORK_DIR/summary.txt"
     FILE_CATALOG="$WORK_DIR/catalog-packages.txt"
+    FILE_CATALOG_LIFECYCLE_VERSIONS="$WORK_DIR/catalog-lifecycle-versions.txt"
+    FILE_CATALOG_BUNDLE_VERSIONS="$WORK_DIR/catalog-bundle-versions.txt"
     FILE_REQUESTED="$WORK_DIR/requested-packages.txt"
     FILE_PLCC_OPERATORS="$WORK_DIR/plcc-operators.txt"
     FILE_OPERATORS="$WORK_DIR/operators.txt"
@@ -770,7 +861,9 @@ main() {
     g_results_missing=()
     g_results_withissues=()
     g_results_duplicated=()
-    g_results_notincatalog=()
+    g_results_catalogmissing=()
+    g_results_catalogok=()
+    g_results_catalogpartial=()
     g_results_plccok=()
     g_results_allpassed=()
     g_operator_catalog_statuses=()
@@ -780,6 +873,7 @@ main() {
     print_operator_list
     print_summary
     print_issues_detail
+    print_missing_lifecycle_detail
     print_csv_lists
 
     copy_output_files
