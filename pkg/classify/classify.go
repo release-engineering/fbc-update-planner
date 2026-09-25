@@ -88,13 +88,28 @@ type VersionGap struct {
 	Reasons []string `json:"reasons,omitempty"`
 }
 
+// CatalogStatus describes the catalog coverage state for a package.
+// Three constant values cover the stable states; partial coverage uses a
+// dynamically formatted "X/Y" string (e.g. "3/5") that is not enumerable
+// at compile time.
+type CatalogStatus string
+
+const (
+	// CatalogStatusOK means all bundle versions have lifecycle entries.
+	CatalogStatusOK CatalogStatus = "OK"
+	// CatalogStatusMissing means bundles exist but no lifecycle entry.
+	CatalogStatusMissing CatalogStatus = "MISSING"
+	// CatalogStatusNA means no bundles are shipped for this package.
+	CatalogStatusNA CatalogStatus = "N/A"
+)
+
 // OperatorReport holds the classification for one operator package.
 type OperatorReport struct {
-	Package       string       `json:"package"`
-	PrimaryAction Action       `json:"primaryAction"`
-	PLCCStatus    PLCCStatus   `json:"plccStatus"`
-	CatalogStatus string       `json:"catalogStatus"`
-	Gaps          []VersionGap `json:"gaps,omitempty"`
+	Package       string        `json:"package"`
+	PrimaryAction Action        `json:"primaryAction"`
+	PLCC          PLCCStatus    `json:"plccStatus"`
+	CatalogStatus CatalogStatus `json:"catalogStatus"`
+	Gaps          []VersionGap  `json:"gaps,omitempty"`
 }
 
 // CatalogData holds pre-extracted catalog information: which packages
@@ -119,7 +134,10 @@ type Input struct {
 	Packages []string
 	// Validators are per-product PLCC validators to apply.
 	Validators []plcc.Validator
-	// CatalogValidators are cross-product PLCC validators.
+	// CatalogValidators are cross-product PLCC validators (e.g.
+	// ValidateNoDuplicates). When omitted, duplicate-package detection is
+	// skipped and PLCCStatusDuplicate will never be returned — duplicates
+	// are silently resolved by first-match-wins in buildPLCCIndex.
 	CatalogValidators []plcc.CatalogValidator
 }
 
@@ -218,17 +236,27 @@ func classifyPackage(
 	bundleVersions := cd.BundleVersions[pkg]
 	lifecycleVersions := cd.LifecycleVersions[pkg]
 
-	// Compute PLCC status.
-	r.PLCCStatus = computePLCCStatus(pkg, product, catalogRejections, validators)
+	// Compute per-product validation once. Both PLCC status and gap
+	// classification consume this result, avoiding redundant calls to
+	// plcc.ValidateProduct.
+	var productReasons []string
+	if product != nil && len(validators) > 0 {
+		if _, ok := catalogRejections[pkg]; !ok {
+			productReasons = plcc.ValidateProduct(*product, validators...)
+		}
+	}
+
+	// Compute PLCC status using the cached validation result.
+	r.PLCC = computePLCCStatus(pkg, product, catalogRejections, productReasons)
 
 	// Compute catalog status.
 	r.CatalogStatus = computeCatalogStatus(lifecycleVersions, bundleVersions)
 
 	// No bundles shipped: the primary action depends on PLCC status.
 	if len(bundleVersions) == 0 {
-		if r.PLCCStatus == PLCCStatusOK {
+		if r.PLCC == PLCCStatusOK {
 			r.PrimaryAction = ActionNoCatalogBundles
-		} else if r.PLCCStatus == PLCCStatusMissing {
+		} else if r.PLCC == PLCCStatusMissing {
 			r.PrimaryAction = ActionPLCCMissing
 		} else {
 			// PLCC data has issues — Fix PLCC takes priority.
@@ -245,16 +273,7 @@ func classifyPackage(
 		return r
 	}
 
-	// Cache per-product validation results to avoid re-running validators
-	// for every gap (N+1 evaluations).
-	var productReasons []string
-	if product != nil && len(validators) > 0 {
-		if _, ok := catalogRejections[pkg]; !ok {
-			productReasons = plcc.ValidateProduct(*product, validators...)
-		}
-	}
-
-	// Classify each missing version.
+	// Classify each missing version using cached validation results.
 	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogRejections, productReasons)
 
 	// Determine primary action: highest priority among all gaps.
@@ -264,11 +283,13 @@ func classifyPackage(
 }
 
 // computePLCCStatus returns the PLCC status for the package.
+// productReasons are the pre-computed per-product validation results
+// (computed once in classifyPackage and shared with gap classification).
 func computePLCCStatus(
 	pkg string,
 	product *plcc.Product,
 	catalogRejections plcc.CatalogRejections,
-	validators []plcc.Validator,
+	productReasons []string,
 ) PLCCStatus {
 	if product == nil {
 		return PLCCStatusMissing
@@ -282,25 +303,22 @@ func computePLCCStatus(
 		}
 		return PLCCStatusInvalid
 	}
-	if len(validators) > 0 {
-		reasons := plcc.ValidateProduct(*product, validators...)
-		if len(reasons) > 0 {
-			return PLCCStatusInvalid
-		}
+	if len(productReasons) > 0 {
+		return PLCCStatusInvalid
 	}
 	return PLCCStatusOK
 }
 
-// computeCatalogStatus returns the catalog coverage string.
-// Returns "N/A" when bundle data is absent (no bundles to compare against),
-// "MISSING" when bundles exist but no lifecycle entry, "OK" for full coverage,
-// or "X/Y" for partial coverage.
-func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) string {
+// computeCatalogStatus returns the catalog coverage state.
+// Returns CatalogStatusNA when bundle data is absent, CatalogStatusMissing
+// when bundles exist but no lifecycle entry, CatalogStatusOK for full
+// coverage, or a dynamic "X/Y" CatalogStatus for partial coverage.
+func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) CatalogStatus {
 	if len(bundleVersions) == 0 {
-		return "N/A"
+		return CatalogStatusNA
 	}
 	if len(lifecycleVersions) == 0 {
-		return "MISSING"
+		return CatalogStatusMissing
 	}
 	covered := 0
 	for v := range bundleVersions {
@@ -310,13 +328,14 @@ func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) str
 	}
 	total := len(bundleVersions)
 	if covered == total {
-		return "OK"
+		return CatalogStatusOK
 	}
 	return formatCoverage(covered, total)
 }
 
-func formatCoverage(covered, total int) string {
-	return strconv.Itoa(covered) + "/" + strconv.Itoa(total)
+// formatCoverage returns a "covered/total" ratio string as a CatalogStatus.
+func formatCoverage(covered, total int) CatalogStatus {
+	return CatalogStatus(strconv.Itoa(covered) + "/" + strconv.Itoa(total))
 }
 
 // findMissingVersions returns bundle versions not covered by lifecycle, sorted.

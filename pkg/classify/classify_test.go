@@ -83,25 +83,24 @@ func TestClassifyFullCoverage(t *testing.T) {
 	if reports[0].PrimaryAction != ActionOK {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionOK)
 	}
-	if reports[0].CatalogStatus != "OK" {
-		t.Errorf("catalog status = %q, want OK", reports[0].CatalogStatus)
+	if reports[0].CatalogStatus != CatalogStatusOK {
+		t.Errorf("catalog status = %q, want %q", reports[0].CatalogStatus, CatalogStatusOK)
 	}
 	if len(reports[0].Gaps) != 0 {
 		t.Errorf("got %d gaps, want 0", len(reports[0].Gaps))
 	}
 }
 
-func TestClassifyPatchVersionsCollapse(t *testing.T) {
-	// Bundle versions 1.0.1 and 1.0.2 should collapse to 1.0 for comparison.
+func TestClassifyPreTruncatedBundleVersions(t *testing.T) {
+	// The classify package receives bundle versions already truncated to
+	// MAJOR.MINOR by the catalog extraction layer (shell script's jq + sed).
+	// This test verifies that pre-truncated versions match correctly.
 	catalog := &plcc.Catalog{Data: []plcc.Product{validProduct("op-a", "1.0")}}
 	cd := &CatalogData{
 		LifecycleVersions: map[string]map[string]bool{
 			"op-a": {"1.0": true},
 		},
 		BundleVersions: map[string]map[string]bool{
-			// Bundle versions are already truncated to MAJOR.MINOR by the
-			// catalog extraction layer (shell script's jq + sed). The
-			// classify package receives them pre-truncated.
 			"op-a": {"1.0": true},
 		},
 	}
@@ -307,8 +306,8 @@ func TestClassifyNoCatalogBundles(t *testing.T) {
 	if reports[0].PrimaryAction != ActionNoCatalogBundles {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionNoCatalogBundles)
 	}
-	if reports[0].CatalogStatus != "N/A" {
-		t.Errorf("catalog status = %q, want N/A", reports[0].CatalogStatus)
+	if reports[0].CatalogStatus != CatalogStatusNA {
+		t.Errorf("catalog status = %q, want %q", reports[0].CatalogStatus, CatalogStatusNA)
 	}
 }
 
@@ -481,8 +480,8 @@ func TestClassifyInvalidPLCCFullCoverage(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("got %d reports, want 1", len(reports))
 	}
-	if reports[0].PLCCStatus != PLCCStatusInvalid {
-		t.Errorf("plcc status = %q, want %q", reports[0].PLCCStatus, PLCCStatusInvalid)
+	if reports[0].PLCC != PLCCStatusInvalid {
+		t.Errorf("plcc status = %q, want %q", reports[0].PLCC, PLCCStatusInvalid)
 	}
 	if reports[0].PrimaryAction != ActionOK {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionOK)
@@ -514,8 +513,8 @@ func TestClassifyPLCCStatusDuplicate(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("got %d reports, want 1", len(reports))
 	}
-	if reports[0].PLCCStatus != PLCCStatusDuplicate {
-		t.Errorf("plcc status = %q, want %q", reports[0].PLCCStatus, PLCCStatusDuplicate)
+	if reports[0].PLCC != PLCCStatusDuplicate {
+		t.Errorf("plcc status = %q, want %q", reports[0].PLCC, PLCCStatusDuplicate)
 	}
 	if reports[0].PrimaryAction != ActionFixPLCC {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionFixPLCC)
@@ -601,7 +600,7 @@ func TestClassifyNoLifecycleEntry(t *testing.T) {
 	if reports[0].PrimaryAction != ActionNeedsRebuild {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionNeedsRebuild)
 	}
-	if reports[0].CatalogStatus != "MISSING" {
-		t.Errorf("catalog status = %q, want MISSING", reports[0].CatalogStatus)
+	if reports[0].CatalogStatus != CatalogStatusMissing {
+		t.Errorf("catalog status = %q, want %q", reports[0].CatalogStatus, CatalogStatusMissing)
 	}
 }

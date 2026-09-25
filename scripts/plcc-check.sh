@@ -899,7 +899,7 @@ _write_action_detail_chunks() {
     fi
 
     local has_content=false
-    local action_name action_key line
+    local action_key line
     for action_key in "Fix PLCC" "PLCC missing" "Needs rebuild"; do
         local entries
         entries="$(jq -r --arg a "$action_key" '
@@ -974,8 +974,6 @@ _render_webhook_payload() {
           $content | split("\u001e") | map(select(length > 0) | {type: "section", text: {type: "mrkdwn", text: ("```\n" + . + "\n```")}});
         def status($label; $count):
           "• " + $label + ": \($count) / \($total)";
-        def action_status($label; $count):
-          "• " + $label + ": \($count) / \($total)";
         def summary_markdown:
           ((if $has_catalog then ["*Ready in PLCC and catalog: \($fully_done) / \($total)*"] else [] end) + [
             "• Scope: \($scope)",
@@ -985,7 +983,7 @@ _render_webhook_payload() {
             status("PLCC invalid"; $plcc_invalid),
             status("PLCC missing"; $plcc_missing)
           ] + (if $has_catalog then [status("Catalog OK"; $catalog_ok), status("Catalog partial"; $catalog_partial), status("Catalog missing"; $catalog_missing)] else [] end)
-          + (if $has_report then ["", "*Actions*", action_status("Fix PLCC"; $action_fix), action_status("PLCC missing"; $action_plcc_missing), action_status("No catalog bundles"; $action_no_bundles), action_status("Needs rebuild"; $action_rebuild), action_status("OK"; $action_ok)] else [] end)) | join("\n");
+          + (if $has_report then ["", "*Actions*", status("Fix PLCC"; $action_fix), status("PLCC missing"; $action_plcc_missing), status("No catalog bundles"; $action_no_bundles), status("Needs rebuild"; $action_rebuild), status("OK"; $action_ok)] else [] end)) | join("\n");
         {
           text: ($heading + ". " + $url),
           blocks: (

@@ -83,7 +83,7 @@ func run() (err error) {
 	flag.BoolVar(&reportMode, "report", false, "classify catalog lifecycle gaps instead of generating FBC; requires --catalog-data")
 	flag.StringVar(&catalogDataPath, "catalog-data", "", "path to catalog data JSON file (used with --report)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\n\nFlags:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\nWith --report, <output-path> is the classification.json destination.\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -122,6 +122,9 @@ func run() (err error) {
 	}
 	if reportMode && logPath != "" {
 		return fmt.Errorf("--report and --log are mutually exclusive")
+	}
+	if reportMode && flag.Lookup("output").Changed {
+		return fmt.Errorf("--report and --output are mutually exclusive (report always outputs JSON)")
 	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
@@ -396,6 +399,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 // computes via jq from `opm render` output: lifecycle versions and bundle
 // versions, both keyed by package name.
 type catalogDataFile struct {
+	SchemaVersion     string              `json:"schemaVersion,omitempty"`
 	LifecycleVersions map[string][]string `json:"lifecycleVersions"`
 	BundleVersions    map[string][]string `json:"bundleVersions"`
 }

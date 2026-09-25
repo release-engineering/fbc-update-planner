@@ -177,6 +177,25 @@ func TestRun(t *testing.T) {
 			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", "data.json", "-l", t.TempDir() + "/log.jsonl", t.TempDir() + "/out.json"},
 			wantErr: "mutually exclusive",
 		},
+		{
+			name:    "report and output are mutually exclusive",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", "data.json", "-o", "yaml", t.TempDir() + "/out.json"},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name:    "catalog-data non-existent file",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", filepath.Join(t.TempDir(), "no-such-file.json"), t.TempDir() + "/out.json"},
+			wantErr: "reading catalog data",
+		},
+		{
+			name: "catalog-data malformed JSON",
+			args: func() []string {
+				badFile := filepath.Join(t.TempDir(), "bad.json")
+				_ = os.WriteFile(badFile, []byte("{not valid json"), 0o644)
+				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", badFile, t.TempDir() + "/out.json"}
+			}(),
+			wantErr: "decoding catalog data",
+		},
 	}
 
 	for _, tt := range tests {
