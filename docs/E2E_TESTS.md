@@ -31,6 +31,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `TestExitCode2_NoFBCOutput` | single-file | none | Untranslatable data → exit code 2, `no FBC data generated` on stderr |
 | `TestExitCode3_MissingPackages` | single-file | all | Missing `-p` package → exit code 3, `requested packages not found` on stderr |
 | `TestDumpPLCC` | `--dump-plcc` | none | Dumps filtered PLCC JSON directly, skipping FBC translation; output is valid JSON containing requested package |
+| `TestSavePLCCSnapshotBeforeFiltering` | `--dump-plcc --save-plcc` | none | The saved snapshot retains products removed from the filtered output |
 | `TestAllowMissing` | single-file | none | `--allow-missing` downgrades missing `-p` package from exit 3 to exit 0; found package still in output |
 | `TestJSONOutput` | single-file | none | `-o json` produces valid JSON containing the expected package |
 | `TestLogFlag` | single-file | all | `-l` redirects validation report to a file; each line is valid JSON |
@@ -43,6 +44,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 |------|------|-------------------|
 | `TestPlccCheckOperatorsFile` | `plcc-check-operators.txt` (4 packages: pass/issues/missing/duplicate) | `summary.txt`, `validation.jsonl`, `fbc-output.yaml`, and `slog.json` message sequence match golden fixtures |
 | `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING statuses, Action classification section, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture; `classification.json` written |
+| `TestPlccCheckBundleOnlyPackageInAllOperatorsReport` | Fake local `opm` output with one bundle-only package | Package appears in all-operator summary, classification JSON, and Slack action details |
 | `TestPlccCheckCatalogVersionCoverage` | 5-operator file + `--catalog-image testdata/catalog-fbc-versions` | Per-version coverage: full coverage → `OK`, partial → `X/Y`, no lifecycle → `MISSING`, no bundles → `OK`; PLCC OK + catalog partial → no done marker; CATALOG PARTIAL summary line; done marker only on full OK |
 | `TestPlccCheckWebhook` | `--webhook list`, `summary`, and `summary,list` | Slack payload contains exactly the selected Markdown sections, catalog-ready indicators (including partial), and workflow link |
 | `TestPlccCheckWebhookRejectsUnknownSection` | invalid `--webhook` section | Unsupported webhook sections fail before the assessment runs |

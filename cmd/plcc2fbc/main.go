@@ -68,6 +68,7 @@ func run() (err error) {
 	var showVersion bool
 	var reportMode bool
 	var catalogDataPath string
+	var snapshotPath string
 
 	flag.StringVarP(&format, "output", "o", "json", "output format: json, json-pretty, or yaml")
 	flag.StringVarP(&logPath, "log", "l", "", "write validation/filtering report to a file; parent directory must exist (default: stderr)")
@@ -82,6 +83,7 @@ func run() (err error) {
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&reportMode, "report", false, "classify catalog lifecycle gaps instead of generating FBC; requires --catalog-data")
 	flag.StringVar(&catalogDataPath, "catalog-data", "", "path to catalog data JSON file (used with --report)")
+	flag.StringVar(&snapshotPath, "save-plcc", "", "write the raw PLCC snapshot used by this run to a JSON file")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\nWith --report, <output-path> is the classification.json destination.\n\nFlags:\n", os.Args[0])
 		flag.PrintDefaults()
@@ -126,6 +128,9 @@ func run() (err error) {
 	if reportMode && flag.Lookup("output").Changed {
 		return fmt.Errorf("--report and --output are mutually exclusive (report always outputs JSON)")
 	}
+	if reportMode && snapshotPath != "" {
+		return fmt.Errorf("--report and --save-plcc are mutually exclusive")
+	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	slog.Info("plcc2fbc starting", "version", versionString(), "validators", validatorsFlag)
@@ -158,7 +163,6 @@ func run() (err error) {
 		}
 
 		rawCatalog.DropWithoutPackageName()
-		rawCatalog.ExpandPackages()
 		rawCatalog.SortByPackage()
 		return runReport(rawCatalog, catalogDataPath, packages, writePath, validators, catalogValidators)
 	}
@@ -193,7 +197,7 @@ func run() (err error) {
 		}
 	}
 
-	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict, allowMissing, reportWriter)
+	catalog, err := loadAndValidate(inputPath, packages, validatorsFlag, strict, allowMissing, snapshotPath, reportWriter)
 	if err != nil {
 		var pkgErr *plcc.PackagesNotFoundError
 		if errors.As(err, &pkgErr) {
@@ -305,7 +309,7 @@ func writePackageToDir(dir, pkgName string, writer fbc.PackageWriter, pkg *fbc.P
 	return nil
 }
 
-func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMissing bool, reportWriter io.Writer) (*plcc.Catalog, error) {
+func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMissing bool, snapshotPath string, reportWriter io.Writer) (*plcc.Catalog, error) {
 	var catalog *plcc.Catalog
 	var err error
 	if inputPath != "" {
@@ -315,6 +319,14 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	}
 	if err != nil {
 		return nil, fmt.Errorf("loading PLCC data: %w", err)
+	}
+	if snapshotPath != "" {
+		if err := validateOutputPath(snapshotPath, false); err != nil {
+			return nil, fmt.Errorf("invalid PLCC snapshot path: %w", err)
+		}
+		if err := catalog.Dump(snapshotPath); err != nil {
+			return nil, fmt.Errorf("writing PLCC snapshot: %w", err)
+		}
 	}
 
 	// Validators can have init functions that require an already loaded catalog,
@@ -395,11 +407,11 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 }
 
 // catalogDataFile is the JSON structure written by the shell script and
-// read by --report. It captures the two maps that plcc-check.sh already
-// computes via jq from `opm render` output: lifecycle versions and bundle
-// versions, both keyed by package name.
+// read by --report. It captures lifecycle package names plus lifecycle and
+// bundle version maps extracted by plcc-check.sh from `opm render` output.
 type catalogDataFile struct {
 	SchemaVersion     string              `json:"schemaVersion,omitempty"`
+	LifecyclePackages []string            `json:"lifecyclePackages"`
 	LifecycleVersions map[string][]string `json:"lifecycleVersions"`
 	BundleVersions    map[string][]string `json:"bundleVersions"`
 }
@@ -422,8 +434,12 @@ func loadCatalogData(path string) (*classify.CatalogData, error) {
 	}
 
 	cd := &classify.CatalogData{
+		LifecyclePackages: make(map[string]bool),
 		LifecycleVersions: make(map[string]map[string]bool),
 		BundleVersions:    make(map[string]map[string]bool),
+	}
+	for _, pkg := range cdf.LifecyclePackages {
+		cd.LifecyclePackages[pkg] = true
 	}
 	for pkg, versions := range cdf.LifecycleVersions {
 		cd.LifecycleVersions[pkg] = make(map[string]bool, len(versions))

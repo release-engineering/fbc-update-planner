@@ -3,11 +3,11 @@ Running plcc2fbc with 4 operators...
 Fetching catalog package list from $CATALOG_IMAGE...
 
 === Requested operators ===
-     PLCC       CATALOG    OPERATOR
-  *  OK         OK         aws-efs-csi-driver-operator
-     INVALID    MISSING    barbican-operator
-     MISSING    MISSING    totally-nonexistent-operator-xyz
-     DUPLICATE  MISSING    amq-streams
+     PLCC       CATALOG    OPERATOR  ACTION
+  *  OK         OK         aws-efs-csi-driver-operator  No catalog bundles
+     INVALID    MISSING    barbican-operator  Fix PLCC
+     MISSING    MISSING    totally-nonexistent-operator-xyz  PLCC missing
+     DUPLICATE  MISSING    amq-streams  Fix PLCC
 
 === Summary ===
   Total operators:   4
@@ -34,6 +34,17 @@ Fetching catalog package list from $CATALOG_IMAGE...
   No catalog bundles:    1 / 4
   Needs rebuild:         0 / 4
   OK:                    0 / 4
+
+  --- Fix PLCC ---
+  amq-streams: package-level issue
+  barbican-operator: package-level issue
+    amq-streams: REQ-VAL-01: package "amq-streams" appears in 2 products
+    barbican-operator: REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
+    barbican-operator: REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
+    barbican-operator: REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+
+  --- PLCC missing ---
+  totally-nonexistent-operator-xyz: package absent from PLCC
 
 === Missing lifecycle versions ===
   (none)

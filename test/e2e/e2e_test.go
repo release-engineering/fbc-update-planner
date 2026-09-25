@@ -87,6 +87,41 @@ func runBinary(t *testing.T, args ...string) (stdout, stderr []byte, exitCode in
 	return outBuf.Bytes(), errBuf.Bytes(), 0
 }
 
+func TestSavePLCCSnapshotBeforeFiltering(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "input.json")
+	snapshot := filepath.Join(dir, "snapshot.json")
+	output := filepath.Join(dir, "filtered.json")
+	data := []byte(`{"data":[{"name":"OCP context","package":"","versions":[]},{"name":"Operator","package":"test-operator","versions":[]}]}`)
+	if err := os.WriteFile(input, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, exitCode := runBinary(t, "--dump-plcc", "--validators", "none", "-i", input, "--save-plcc", snapshot, output)
+	if exitCode != 0 {
+		t.Fatalf("exit code %d; stderr: %s", exitCode, stderr)
+	}
+	readCount := func(path string) int {
+		t.Helper()
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var catalog struct {
+			Data []json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(contents, &catalog); err != nil {
+			t.Fatal(err)
+		}
+		return len(catalog.Data)
+	}
+	if got := readCount(snapshot); got != 2 {
+		t.Errorf("snapshot has %d products, want 2", got)
+	}
+	if got := readCount(output); got != 1 {
+		t.Errorf("filtered output has %d products, want 1", got)
+	}
+}
+
 func extractPackageName(yamlDoc string) string {
 	// "package:" appears in the first few lines of an FBC YAML document
 	for _, line := range strings.SplitN(yamlDoc, "\n", 5) {

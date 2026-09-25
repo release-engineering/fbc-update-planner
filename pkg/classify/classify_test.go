@@ -28,8 +28,8 @@ func validProduct(pkg string, versions ...string) plcc.Product {
 	var vers []plcc.Version
 	for _, v := range versions {
 		vers = append(vers, plcc.Version{
-			Name: v,
-			Tier: plcc.TierAligned,
+			Name:                   v,
+			Tier:                   plcc.TierAligned,
 			OpenShiftCompatibility: "4.14",
 			Phases: []plcc.Phase{
 				{Name: plcc.PhaseFullSupport, StartDate: "2025-01-01T00:00:00.000Z", EndDate: "2025-06-30T00:00:00.000Z", StartDateFormat: "date", EndDateFormat: "date"},
@@ -255,6 +255,51 @@ func TestClassifyFixPLCCConversionRejection(t *testing.T) {
 	}
 }
 
+func TestClassifyRejectsWholePackageForSiblingConversionFailure(t *testing.T) {
+	product := validProduct("op-a", "1.0", "1.1")
+	product.Versions[1].Phases[0].StartDate = "invalid-date"
+	reports := Classify(Input{
+		Catalog: &plcc.Catalog{Data: []plcc.Product{product}},
+		CatalogData: &CatalogData{BundleVersions: map[string]map[string]bool{
+			"op-a": {"1.0": true},
+		}},
+		Packages: []string{"op-a"},
+	})
+	if len(reports) != 1 || len(reports[0].Gaps) != 1 {
+		t.Fatalf("unexpected report: %+v", reports)
+	}
+	if reports[0].PrimaryAction != ActionFixPLCC || reports[0].Gaps[0].Action != ActionNeedsRebuild {
+		t.Errorf("sibling conversion error must block the package: %+v", reports[0])
+	}
+	if len(reports[0].Reasons) == 0 {
+		t.Error("expected conversion reason for the blocked package")
+	}
+}
+
+func TestClassifyMixedInvalidMissingAndRebuildGaps(t *testing.T) {
+	product := validProduct("op-a", "1.0", "1.1")
+	product.Versions[1].Phases[0].StartDate = "invalid-date"
+	reports := Classify(Input{
+		Catalog: &plcc.Catalog{Data: []plcc.Product{product}},
+		CatalogData: &CatalogData{BundleVersions: map[string]map[string]bool{
+			"op-a": {"1.0": true, "1.1": true, "1.2": true},
+		}},
+		Packages: []string{"op-a"},
+	})
+	if len(reports) != 1 || len(reports[0].Gaps) != 3 {
+		t.Fatalf("unexpected report: %+v", reports)
+	}
+	if reports[0].PrimaryAction != ActionFixPLCC {
+		t.Errorf("primary action = %q, want Fix PLCC", reports[0].PrimaryAction)
+	}
+	want := map[string]Action{"1.0": ActionNeedsRebuild, "1.1": ActionFixPLCC, "1.2": ActionPLCCMissing}
+	for _, gap := range reports[0].Gaps {
+		if gap.Action != want[gap.Version] {
+			t.Errorf("gap %s action = %q, want %q", gap.Version, gap.Action, want[gap.Version])
+		}
+	}
+}
+
 func TestClassifyNeedsRebuild(t *testing.T) {
 	catalog := &plcc.Catalog{Data: []plcc.Product{validProduct("op-a", "1.0", "1.1")}}
 	cd := &CatalogData{
@@ -306,8 +351,8 @@ func TestClassifyNoCatalogBundles(t *testing.T) {
 	if reports[0].PrimaryAction != ActionNoCatalogBundles {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionNoCatalogBundles)
 	}
-	if reports[0].CatalogStatus != CatalogStatusNA {
-		t.Errorf("catalog status = %q, want %q", reports[0].CatalogStatus, CatalogStatusNA)
+	if reports[0].CatalogStatus != CatalogStatusOK {
+		t.Errorf("catalog status = %q, want %q", reports[0].CatalogStatus, CatalogStatusOK)
 	}
 }
 
@@ -404,6 +449,21 @@ func TestClassifyBundleOnlyPackageAllOperators(t *testing.T) {
 	}
 }
 
+func TestClassifyLifecycleOnlyPackageAllOperators(t *testing.T) {
+	reports := Classify(Input{
+		Catalog: &plcc.Catalog{},
+		CatalogData: &CatalogData{LifecyclePackages: map[string]bool{
+			"lifecycle-only": true,
+		}},
+	})
+	if len(reports) != 1 || reports[0].Package != "lifecycle-only" {
+		t.Fatalf("lifecycle-only package missing from all-operator report: %+v", reports)
+	}
+	if reports[0].CatalogStatus != CatalogStatusOK || reports[0].PrimaryAction != ActionPLCCMissing {
+		t.Errorf("unexpected lifecycle-only classification: %+v", reports[0])
+	}
+}
+
 func TestClassifyPriorityOrdering(t *testing.T) {
 	// Fix PLCC > PLCC missing > No catalog bundles > Needs rebuild > OK
 	tests := []struct {
@@ -459,9 +519,7 @@ func TestClassifyNilCatalog(t *testing.T) {
 
 func TestClassifyInvalidPLCCFullCoverage(t *testing.T) {
 	// A package with PLCC data that fails validation (PLCCStatus = INVALID)
-	// but has full catalog coverage (no gaps) should report PrimaryAction = OK.
-	// This exercises the path at classify.go:243 where len(missingVersions)==0
-	// returns early with ActionOK regardless of PLCCStatus.
+	// still needs a PLCC fix even when the current catalog has full coverage.
 	catalog := &plcc.Catalog{Data: []plcc.Product{invalidProduct("op-invalid")}}
 	cd := &CatalogData{
 		LifecycleVersions: map[string]map[string]bool{
@@ -483,8 +541,11 @@ func TestClassifyInvalidPLCCFullCoverage(t *testing.T) {
 	if reports[0].PLCC != PLCCStatusInvalid {
 		t.Errorf("plcc status = %q, want %q", reports[0].PLCC, PLCCStatusInvalid)
 	}
-	if reports[0].PrimaryAction != ActionOK {
-		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionOK)
+	if reports[0].PrimaryAction != ActionFixPLCC {
+		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionFixPLCC)
+	}
+	if len(reports[0].Reasons) == 0 {
+		t.Error("expected package-level reasons")
 	}
 	if len(reports[0].Gaps) != 0 {
 		t.Errorf("got %d gaps, want 0", len(reports[0].Gaps))

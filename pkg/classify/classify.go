@@ -74,7 +74,7 @@ const (
 	PLCCStatusOK PLCCStatus = "OK"
 	// PLCCStatusMissing means the product is absent from PLCC data.
 	PLCCStatusMissing PLCCStatus = "MISSING"
-	// PLCCStatusInvalid means PLCC data is present but fails validation.
+	// PLCCStatusInvalid means PLCC data is present but fails validation or translation.
 	PLCCStatusInvalid PLCCStatus = "INVALID"
 	// PLCCStatusDuplicate means the package name appears in multiple PLCC products.
 	PLCCStatusDuplicate PLCCStatus = "DUPLICATE"
@@ -89,7 +89,7 @@ type VersionGap struct {
 }
 
 // CatalogStatus describes the catalog coverage state for a package.
-// Three constant values cover the stable states; partial coverage uses a
+// Two constant values cover the stable states; partial coverage uses a
 // dynamically formatted "X/Y" string (e.g. "3/5") that is not enumerable
 // at compile time.
 type CatalogStatus string
@@ -97,10 +97,8 @@ type CatalogStatus string
 const (
 	// CatalogStatusOK means all bundle versions have lifecycle entries.
 	CatalogStatusOK CatalogStatus = "OK"
-	// CatalogStatusMissing means bundles exist but no lifecycle entry.
+	// CatalogStatusMissing means no lifecycle entry exists.
 	CatalogStatusMissing CatalogStatus = "MISSING"
-	// CatalogStatusNA means no bundles are shipped for this package.
-	CatalogStatusNA CatalogStatus = "N/A"
 )
 
 // OperatorReport holds the classification for one operator package.
@@ -109,12 +107,16 @@ type OperatorReport struct {
 	PrimaryAction Action        `json:"primaryAction"`
 	PLCC          PLCCStatus    `json:"plccStatus"`
 	CatalogStatus CatalogStatus `json:"catalogStatus"`
+	Reasons       []string      `json:"reasons,omitempty"`
 	Gaps          []VersionGap  `json:"gaps,omitempty"`
 }
 
 // CatalogData holds pre-extracted catalog information: which packages
 // have lifecycle entries and bundles, and what versions each contains.
 type CatalogData struct {
+	// LifecyclePackages records packages with a lifecycle entry, including
+	// entries with no versions.
+	LifecyclePackages map[string]bool
 	// LifecycleVersions maps package name → set of MAJOR.MINOR version strings
 	// present in lifecycle entries.
 	LifecycleVersions map[string]map[string]bool
@@ -129,8 +131,8 @@ type Input struct {
 	Catalog *plcc.Catalog
 	// CatalogData holds lifecycle and bundle version sets from the OCP catalog.
 	CatalogData *CatalogData
-	// Packages to assess. If empty, all packages with bundles or PLCC data
-	// are assessed.
+	// Packages to assess. If empty, all packages with PLCC data, lifecycle
+	// entries, or bundles are assessed.
 	Packages []string
 	// Validators are per-product PLCC validators to apply.
 	Validators []plcc.Validator
@@ -152,7 +154,7 @@ func Classify(input Input) []OperatorReport {
 		return nil
 	}
 
-	// Build a lookup from package name to expanded PLCC product.
+	// Build a lookup from package name to raw PLCC product.
 	plccByPackage := buildPLCCIndex(input.Catalog)
 
 	// Determine the catalog-level rejections.
@@ -201,14 +203,17 @@ func buildPLCCIndex(catalog *plcc.Catalog) map[string]*plcc.Product {
 	return index
 }
 
-// allPackages returns the union of packages with PLCC data and packages
-// with catalog bundles, sorted alphabetically.
+// allPackages returns the union of packages with PLCC data, lifecycle
+// entries, and catalog bundles, sorted alphabetically.
 func allPackages(plccIndex map[string]*plcc.Product, cd *CatalogData) []string {
 	seen := make(map[string]bool)
 	for pkg := range plccIndex {
 		seen[pkg] = true
 	}
 	for pkg := range cd.BundleVersions {
+		seen[pkg] = true
+	}
+	for pkg := range cd.LifecyclePackages {
 		seen[pkg] = true
 	}
 	for pkg := range cd.LifecycleVersions {
@@ -245,20 +250,35 @@ func classifyPackage(
 			productReasons = plcc.ValidateProduct(*product, validators...)
 		}
 	}
+	var translationReasons []string
+	if product != nil && len(catalogRejections[pkg]) == 0 && len(productReasons) == 0 {
+		// Translation rejects a whole package when any version fails. Keep
+		// that result for the primary call, then classify gaps individually.
+		perPackage := *product
+		perPackage.Package = pkg
+		_, failure := fbc.TranslateProduct(perPackage, fbc.DefaultFilters()...)
+		if failure != nil {
+			translationReasons = failure.Reasons
+		}
+	}
+	r.Reasons = append(r.Reasons, catalogRejections[pkg]...)
+	r.Reasons = append(r.Reasons, productReasons...)
+	r.Reasons = append(r.Reasons, translationReasons...)
 
-	// Compute PLCC status using the cached validation result.
-	r.PLCC = computePLCCStatus(pkg, product, catalogRejections, productReasons)
+	// Compute PLCC status using the validation and translation results.
+	r.PLCC = computePLCCStatus(pkg, product, catalogRejections, r.Reasons)
 
 	// Compute catalog status.
-	r.CatalogStatus = computeCatalogStatus(lifecycleVersions, bundleVersions)
+	r.CatalogStatus = computeCatalogStatus(cd.LifecyclePackages[pkg] || len(lifecycleVersions) > 0, lifecycleVersions, bundleVersions)
 
 	// No bundles shipped: the primary action depends on PLCC status.
 	if len(bundleVersions) == 0 {
-		if r.PLCC == PLCCStatusOK {
+		switch r.PLCC {
+		case PLCCStatusOK:
 			r.PrimaryAction = ActionNoCatalogBundles
-		} else if r.PLCC == PLCCStatusMissing {
+		case PLCCStatusMissing:
 			r.PrimaryAction = ActionPLCCMissing
-		} else {
+		default:
 			// PLCC data has issues — Fix PLCC takes priority.
 			r.PrimaryAction = ActionFixPLCC
 		}
@@ -269,27 +289,35 @@ func classifyPackage(
 	missingVersions := findMissingVersions(bundleVersions, lifecycleVersions)
 
 	if len(missingVersions) == 0 {
-		r.PrimaryAction = ActionOK
+		if r.PLCC == PLCCStatusMissing {
+			r.PrimaryAction = ActionPLCCMissing
+		} else if len(r.Reasons) > 0 {
+			r.PrimaryAction = ActionFixPLCC
+		} else {
+			r.PrimaryAction = ActionOK
+		}
 		return r
 	}
 
 	// Classify each missing version using cached validation results.
-	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogRejections, productReasons)
+	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogRejections[pkg], productReasons)
 
 	// Determine primary action: highest priority among all gaps.
 	r.PrimaryAction = primaryAction(r)
+	if len(r.Reasons) > 0 {
+		r.PrimaryAction = ActionFixPLCC
+	}
 
 	return r
 }
 
 // computePLCCStatus returns the PLCC status for the package.
-// productReasons are the pre-computed per-product validation results
-// (computed once in classifyPackage and shared with gap classification).
+// reasons contains the package's validation and translation failures.
 func computePLCCStatus(
 	pkg string,
 	product *plcc.Product,
 	catalogRejections plcc.CatalogRejections,
-	productReasons []string,
+	reasons []string,
 ) PLCCStatus {
 	if product == nil {
 		return PLCCStatusMissing
@@ -303,22 +331,21 @@ func computePLCCStatus(
 		}
 		return PLCCStatusInvalid
 	}
-	if len(productReasons) > 0 {
+	if len(reasons) > 0 {
 		return PLCCStatusInvalid
 	}
 	return PLCCStatusOK
 }
 
 // computeCatalogStatus returns the catalog coverage state.
-// Returns CatalogStatusNA when bundle data is absent, CatalogStatusMissing
-// when bundles exist but no lifecycle entry, CatalogStatusOK for full
+// Returns CatalogStatusMissing when there is no lifecycle entry, CatalogStatusOK for full
 // coverage, or a dynamic "X/Y" CatalogStatus for partial coverage.
-func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) CatalogStatus {
-	if len(bundleVersions) == 0 {
-		return CatalogStatusNA
-	}
-	if len(lifecycleVersions) == 0 {
+func computeCatalogStatus(hasLifecycle bool, lifecycleVersions, bundleVersions map[string]bool) CatalogStatus {
+	if !hasLifecycle {
 		return CatalogStatusMissing
+	}
+	if len(bundleVersions) == 0 {
+		return CatalogStatusOK
 	}
 	covered := 0
 	for v := range bundleVersions {
@@ -385,12 +412,11 @@ func classifyVersionGaps(
 	pkg string,
 	missingVersions []string,
 	product *plcc.Product,
-	catalogRejections plcc.CatalogRejections,
-	productReasons []string,
+	catalogReasons, productReasons []string,
 ) []VersionGap {
 	gaps := make([]VersionGap, 0, len(missingVersions))
 	for _, ver := range missingVersions {
-		gap := classifyOneVersion(pkg, ver, product, catalogRejections, productReasons)
+		gap := classifyOneVersion(pkg, ver, product, catalogReasons, productReasons)
 		gaps = append(gaps, gap)
 	}
 	return gaps
@@ -413,8 +439,7 @@ func classifyVersionGaps(
 func classifyOneVersion(
 	pkg, version string,
 	product *plcc.Product,
-	catalogRejections plcc.CatalogRejections,
-	productReasons []string,
+	catalogReasons, productReasons []string,
 ) VersionGap {
 	// If PLCC product is missing entirely, all versions are PLCC missing.
 	if product == nil {
@@ -426,8 +451,8 @@ func classifyOneVersion(
 	// multiple PLCC products, the index resolves to only one. A version
 	// absent from the indexed product but present in a duplicate would be
 	// wrongly classified as "PLCC missing" if we checked existence first.
-	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
-		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: reasons}
+	if len(catalogReasons) > 0 {
+		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: catalogReasons}
 	}
 
 	// Check if the specific version exists in PLCC data.
@@ -448,15 +473,11 @@ func classifyOneVersion(
 		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: productReasons}
 	}
 
-	// The version exists in valid PLCC data. Try FBC translation.
-	// Build a single-version product to test translation.
-	testProduct := plcc.Product{
-		Name:           product.Name,
-		Package:        pkg,
-		Versions:       []plcc.Version{*plccVersion},
-		ReleaseCadence: product.ReleaseCadence,
-		IsOperator:     product.IsOperator,
-	}
+	// Keep per-version detail even when another version blocks translation of
+	// the complete package. The package-level failure controls the primary call.
+	testProduct := *product
+	testProduct.Package = pkg
+	testProduct.Versions = []plcc.Version{*plccVersion}
 	_, failure := fbc.TranslateProduct(testProduct, fbc.DefaultFilters()...)
 	if failure != nil {
 		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: failure.Reasons}

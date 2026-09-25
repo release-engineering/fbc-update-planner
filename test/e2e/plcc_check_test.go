@@ -323,7 +323,9 @@ func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
 		}
 	}
 	// operator-missing has MISSING status → should not appear in missing lifecycle section
-	if strings.Contains(string(stdout), "  operator-missing:") {
+	missingSection := strings.SplitN(string(stdout), "=== Missing lifecycle versions ===", 2)[1]
+	missingSection = strings.SplitN(missingSection, "=== CSV operator lists ===", 2)[0]
+	if strings.Contains(missingSection, "  operator-missing:") {
 		t.Errorf("operator-missing should be skipped in missing lifecycle versions (no lifecycle data):\n%s", stdout)
 	}
 	// Catalog partial CSV list
@@ -389,6 +391,67 @@ printf '%s\n' '{"schema":"io.openshift.operators.lifecycles.v1alpha1","package":
 	}
 	if len(catalogPackages) != 0 {
 		t.Errorf("catalog-packages.txt = %q, want empty", catalogPackages)
+	}
+}
+
+func TestPlccCheckBundleOnlyPackageInAllOperatorsReport(t *testing.T) {
+	fakeBin := t.TempDir()
+	fakeOpm := filepath.Join(fakeBin, "opm")
+	if err := os.WriteFile(fakeOpm, []byte(`#!/bin/sh
+printf '%s\n' '{"schema":"olm.bundle","package":"catalog-only","properties":[{"type":"olm.package","value":{"packageName":"catalog-only","version":"1.2.3"}}]}'
+`), 0o755); err != nil {
+		t.Fatalf("writing fake opm: %v", err)
+	}
+	outDir := t.TempDir()
+	stdout, stderr, exitCode := runPlccCheckWithEnv(t,
+		[]string{"PATH=" + fakeBin + string(os.PathListSeparator) + os.Getenv("PATH")},
+		"-i", "testdata/untranslatable.json",
+		"--validators", "none",
+		"--webhook", "summary,list",
+		"-o", outDir,
+		"--catalog-image", "unused-catalog-reference",
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code %d; stderr:\n%s", exitCode, stderr)
+	}
+	for _, want := range []string{"catalog-only  PLCC missing", "catalog-only: 1.2", "PLCC missing:          1 / 2"} {
+		if !strings.Contains(string(stdout), want) {
+			t.Errorf("summary missing %q:\n%s", want, stdout)
+		}
+	}
+	var reports []struct {
+		Package       string `json:"package"`
+		PrimaryAction string `json:"primaryAction"`
+		Gaps          []struct {
+			Version string `json:"version"`
+			Action  string `json:"action"`
+		} `json:"gaps"`
+	}
+	data, err := os.ReadFile(filepath.Join(outDir, "classification.json"))
+	if err != nil {
+		t.Fatalf("reading classification: %v", err)
+	}
+	if err := json.Unmarshal(data, &reports); err != nil {
+		t.Fatalf("decoding classification: %v", err)
+	}
+	found := false
+	for _, report := range reports {
+		if report.Package == "catalog-only" {
+			found = true
+			if report.PrimaryAction != "PLCC missing" || len(report.Gaps) != 1 || report.Gaps[0].Version != "1.2" {
+				t.Errorf("bundle-only classification = %+v", report)
+			}
+		}
+	}
+	if !found {
+		t.Error("bundle-only package absent from classification")
+	}
+	payload, err := os.ReadFile(filepath.Join(outDir, "slack-payload.json"))
+	if err != nil {
+		t.Fatalf("reading Slack payload: %v", err)
+	}
+	if !strings.Contains(string(payload), "catalog-only: 1.2") || !strings.Contains(string(payload), "PLCC missing: 1 / 2") {
+		t.Errorf("Slack payload omits bundle-only classification: %s", payload)
 	}
 }
 

@@ -28,6 +28,7 @@ bin/plcc2fbc [flags] <output-path>
 | `--split` | Write each package to `<dir>/<package>/lifecycle.{json,yaml}`; positional arg is a directory |
 | `--report` | Classify catalog lifecycle gaps instead of generating FBC; requires `--catalog-data` |
 | `--catalog-data <file>` | Path to catalog data JSON file (used with `--report`) |
+| `--save-plcc <file>` | Save the raw PLCC snapshot used for this run (used by `plcc-check.sh` to keep classification consistent) |
 
 ## Exit Codes
 

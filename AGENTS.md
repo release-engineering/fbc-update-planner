@@ -87,6 +87,7 @@ plcc2fbc [flags] <output-path>
     --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory
     --report        Classify catalog lifecycle gaps instead of generating FBC; requires --catalog-data
     --catalog-data  Path to catalog data JSON file (used with --report)
+    --save-plcc     Save the raw PLCC snapshot used by this run
 ```
 
 ## Architecture
@@ -115,9 +116,8 @@ With --dump-plcc:
 With --report:
   → catalog.LookupValidators()      # resolve validators before dropping OCP product
   → rawCatalog.DropWithoutPackageName()
-  → rawCatalog.ExpandPackages()
   → rawCatalog.SortByPackage()
-  → loadCatalogData()               # load pre-extracted catalog data (lifecycle + bundle versions)
+  → loadCatalogData()               # load pre-extracted lifecycle packages and version sets
   → classify.Classify()             # compare PLCC vs catalog, classify each operator/version
   → json.Encode(reports)            # write classification.json
 ```

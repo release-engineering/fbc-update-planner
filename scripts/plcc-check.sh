@@ -217,6 +217,11 @@ run_plcc2fbc() {
     if [[ -n "$g_input_file" ]]; then
         g_plcc2fbc_args+=(-i "$g_input_file")
     fi
+    if [[ -n "$g_catalog_image" ]]; then
+        # Preserve the exact input used for classification. A second fetch
+        # or a changed input file could give contradictory advice.
+        g_plcc2fbc_args+=(--save-plcc "$FILE_PLCC_SNAPSHOT")
+    fi
 
     g_operators_number="all"
     if [[ -n "$g_operators_file" ]]; then
@@ -313,17 +318,12 @@ fetch_catalog_packages() {
 # Converts the TSV lifecycle/bundle version files into the JSON structure
 # expected by plcc2fbc --report --catalog-data.
 _build_catalog_data_json() {
-    local lifecycle_json bundle_json
-    lifecycle_json="$(awk -F'\t' '
-        { versions[$1] = versions[$1] (versions[$1] ? "," : "") "\"" $2 "\"" }
-        END { printf "{"; sep=""; for (p in versions) { printf "%s\"%s\":[%s]", sep, p, versions[p]; sep="," }; printf "}" }
-    ' "$FILE_CATALOG_LIFECYCLE_VERSIONS")"
-    bundle_json="$(awk -F'\t' '
-        { versions[$1] = versions[$1] (versions[$1] ? "," : "") "\"" $2 "\"" }
-        END { printf "{"; sep=""; for (p in versions) { printf "%s\"%s\":[%s]", sep, p, versions[p]; sep="," }; printf "}" }
-    ' "$FILE_CATALOG_BUNDLE_VERSIONS")"
-    jq -n --argjson lv "$lifecycle_json" --argjson bv "$bundle_json" \
-        '{lifecycleVersions: $lv, bundleVersions: $bv}' >"$FILE_CATALOG_DATA"
+    local lifecycle_json bundle_json lifecycle_packages_json
+    lifecycle_packages_json="$(jq -Rn '[inputs | select(length > 0)]' "$FILE_CATALOG")"
+    lifecycle_json="$(jq -Rn '[inputs | split("\t") | select(length == 2)] | group_by(.[0]) | map({key: .[0][0], value: map(.[1])}) | from_entries' "$FILE_CATALOG_LIFECYCLE_VERSIONS")"
+    bundle_json="$(jq -Rn '[inputs | split("\t") | select(length == 2)] | group_by(.[0]) | map({key: .[0][0], value: map(.[1])}) | from_entries' "$FILE_CATALOG_BUNDLE_VERSIONS")"
+    jq -n --argjson lp "$lifecycle_packages_json" --argjson lv "$lifecycle_json" --argjson bv "$bundle_json" \
+        '{lifecyclePackages: $lp, lifecycleVersions: $lv, bundleVersions: $bv}' >"$FILE_CATALOG_DATA"
 }
 
 # Filters sorted package names from stdin to the selected operator set. In
@@ -364,10 +364,9 @@ _derive_operators_from_output() {
         g_operators=("${sorted[@]}")
     fi
 
-    # A lifecycle entry served by the catalog but absent from current PLCC
-    # data is stale catalog content. Include it in all-packages reports and
-    # mark it as missing from PLCC.
-    if [[ -n "$g_catalog_image" && ${#g_catalog_packages[@]} -gt 0 ]]; then
+    # Include lifecycle-only and bundle-only catalog packages in all-operator
+    # reports, including packages absent from the current PLCC snapshot.
+    if [[ -n "$g_catalog_image" ]]; then
         : > "$FILE_PLCC_OPERATORS"
         if [[ ${#g_operators[@]} -gt 0 ]]; then
             printf '%s\n' "${g_operators[@]}" > "$FILE_PLCC_OPERATORS"
@@ -376,8 +375,8 @@ _derive_operators_from_output() {
             [[ -z "$name" ]] && continue
             g_results_missing+=("$name")
             g_operators+=("$name")
-        done < <(awk 'FILENAME == ARGV[1] { plcc[$0] = 1; next } !($0 in plcc)' \
-            "$FILE_PLCC_OPERATORS" "$FILE_CATALOG")
+        done < <(awk 'FILENAME == ARGV[1] { plcc[$0] = 1; next } !($0 in plcc) { print $0 }' \
+            "$FILE_PLCC_OPERATORS" "$FILE_CATALOG" <(cut -f1 "$FILE_CATALOG_BUNDLE_VERSIONS") | sort -u)
 
         local all_sorted=()
         while IFS= read -r name; do
@@ -492,10 +491,11 @@ collect_results() {
     fi
     if [[ -n "$g_catalog_image" ]]; then
         # Compute per-operator catalog status: OK, MISSING, or X/Y.
-        # Input order matters: lifecycle versions, bundle versions, operators.
+        # Input order matters: lifecycle versions, lifecycle packages, bundle versions, operators.
         awk -F'\t' '
             FILENAME == ARGV[1] { lifepkg[$1] = 1; lifecycle_mm[$1 SUBSEP $2] = 1; next }
-            FILENAME == ARGV[2] {
+            FILENAME == ARGV[2] { lifepkg[$1] = 1; next }
+            FILENAME == ARGV[3] {
                 if (!seen[$1 SUBSEP $2]++) {
                     bundle_total[$1]++
                     if (($1 SUBSEP $2) in lifecycle_mm) bundle_covered[$1]++
@@ -509,7 +509,7 @@ collect_results() {
                 if (total == 0 || covered == total) { print "OK" }
                 else { print covered "/" total }
             }
-        ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG_BUNDLE_VERSIONS" "$FILE_OPERATORS" \
+        ' "$FILE_CATALOG_LIFECYCLE_VERSIONS" "$FILE_CATALOG" "$FILE_CATALOG_BUNDLE_VERSIONS" "$FILE_OPERATORS" \
             > "$FILE_CATALOG_STATUS"
     else
         awk '{ print "-" }' "$FILE_OPERATORS" > "$FILE_CATALOG_STATUS"
@@ -544,16 +544,13 @@ collect_results() {
 # Runs plcc2fbc --report to classify catalog lifecycle gaps by action.
 run_classification() {
     [[ -z "$g_catalog_image" ]] && return
-    [[ ! -f "$FILE_CATALOG_DATA" ]] && return
 
     local report_args=(--report --catalog-data "$FILE_CATALOG_DATA")
-    if [[ -n "$g_input_file" ]]; then
-        report_args+=(-i "$g_input_file")
-    fi
+    report_args+=(-i "$FILE_PLCC_SNAPSHOT")
     if [[ -n "$g_plcc_validators" ]]; then
         report_args+=(--validators "$g_plcc_validators")
     fi
-    if [[ -n "$g_operators_file" ]]; then
+    if [[ ${#g_operators[@]} -gt 0 ]]; then
         local pkg_list
         pkg_list="$(IFS=,; echo "${g_operators[*]}")"
         report_args+=(-p "$pkg_list")
@@ -566,8 +563,20 @@ run_classification() {
     set -e
 
     if [[ "$exit_code" -ne 0 ]]; then
-        log_info "Warning: classification report exited with code $exit_code"
+        log_error "classification report failed with exit code $exit_code"
+        cat "$WORK_DIR/report-stderr.log" >&2
+        exit 1
     fi
+
+    # Keep actions aligned with g_operators for both summary and Slack rows.
+    jq -Rrn --slurpfile report "$FILE_REPORT" '
+        ($report[0] | map({key: .package, value: .primaryAction}) | from_entries) as $actions
+        | inputs | $actions[.] // ""
+    ' "$FILE_OPERATORS" > "$WORK_DIR/action-status.txt"
+    g_operator_actions=()
+    while IFS= read -r action; do
+        g_operator_actions+=("$action")
+    done < "$WORK_DIR/action-status.txt"
 }
 
 # Prints the classification detail: action groups with affected versions.
@@ -606,19 +615,19 @@ print_classification_detail() {
         fi
         log_info "  $line"
     done < <(jq -r '
-        .[] | select(.gaps[]?.action == "Fix PLCC")
+        .[] | select(.primaryAction == "Fix PLCC")
         | .package as $p
-        | [.gaps[] | select(.action == "Fix PLCC") | .version] | join(", ") | "\($p): \(.)"
-    ' "$FILE_REPORT" 2>/dev/null)
+        | [.gaps[]? | select(.action == "Fix PLCC") | .version] as $versions
+        | if ($versions | length) > 0 then "\($p): \($versions | join(", "))" else "\($p): package-level issue" end
+    ' "$FILE_REPORT")
     # Print reasons for Fix PLCC packages.
     while IFS= read -r line; do
         log_info "    $line"
     done < <(jq -r '
-        .[] | select(.gaps[]?.action == "Fix PLCC")
+        .[] | select(.primaryAction == "Fix PLCC")
         | .package as $p
-        | .gaps[] | select(.action == "Fix PLCC")
-        | .reasons[]? | "  \($p) \(.version): \(.)"
-    ' "$FILE_REPORT" 2>/dev/null | head -50)
+        | .reasons[]? | "\($p): \(.)"
+    ' "$FILE_REPORT")
 
     section_printed=false
     while IFS= read -r line; do
@@ -629,9 +638,10 @@ print_classification_detail() {
         fi
         log_info "  $line"
     done < <(jq -r '
-        .[] | select(.gaps[]?.action == "PLCC missing")
+        .[] | select(.primaryAction == "PLCC missing" or any(.gaps[]?; .action == "PLCC missing"))
         | .package as $p
-        | [.gaps[] | select(.action == "PLCC missing") | .version] | join(", ") | "\($p): \(.)"
+        | [.gaps[]? | select(.action == "PLCC missing") | .version] as $versions
+        | if ($versions | length) > 0 then "\($p): \($versions | join(", "))" else "\($p): package absent from PLCC" end
     ' "$FILE_REPORT" 2>/dev/null)
 
     section_printed=false
@@ -653,7 +663,7 @@ print_operator_list() {
     log_info ""
     log_info "=== Requested operators ==="
     if [[ -n "$g_catalog_image" ]]; then
-        log_info "$(printf "  %-1s  %-9s  %-9s  %s\n" " " "PLCC" "CATALOG" "OPERATOR")"
+        log_info "$(printf "  %-1s  %-9s  %-9s  %s  %s\n" " " "PLCC" "CATALOG" "OPERATOR" "ACTION")"
     else
         log_info "$(printf "  %-1s  %-9s  %s\n" " " "PLCC" "OPERATOR")"
     fi
@@ -663,8 +673,8 @@ print_operator_list() {
             name="${g_operators[$operator_index]}"
             _check_marks "$name" "${g_operator_catalog_statuses[$operator_index]}"
             if [[ -n "$g_catalog_image" ]]; then
-                log_info "$(printf "  %-1s  %-9s  %-9s  %s\n" \
-                    "$g_mark_done" "$g_mark_plcc" "$g_mark_catalog" "$name")"
+                log_info "$(printf "  %-1s  %-9s  %-9s  %s  %s\n" \
+                    "$g_mark_done" "$g_mark_plcc" "$g_mark_catalog" "$name" "${g_operator_actions[$operator_index]}")"
             else
                 log_info "$(printf "  %-1s  %-9s  %s\n" \
                     "$g_mark_done" "$g_mark_plcc" "$name")"
@@ -824,6 +834,9 @@ _webhook_chunks_start() {
 
 _webhook_chunks_add() {
     local line="$1"
+    if (( ${#line} > 2700 )); then
+        line="${line:0:2600}… (see complete artifacts)"
+    fi
     if [[ -n "$g_webhook_chunk" ]] && (( ${#g_webhook_chunk} + ${#line} + 1 > 2800 )); then
         printf '%s\036' "$g_webhook_chunk" >> "$g_webhook_chunks_file"
         g_webhook_chunk=""
@@ -866,7 +879,7 @@ _write_requested_operator_chunks() {
             _check_marks "$name" "${g_operator_catalog_statuses[$operator_index]}"
             local action_label=""
             if [[ -f "$FILE_REPORT" ]]; then
-                action_label="$(jq -r --arg p "$name" '.[] | select(.package == $p) | .primaryAction // ""' "$FILE_REPORT" 2>/dev/null)"
+                action_label="${g_operator_actions[$operator_index]}"
             fi
             if [[ -n "$g_catalog_image" ]]; then
                 if [[ "$g_mark_plcc" == "OK" && "$g_mark_catalog" == "OK" ]]; then
@@ -903,9 +916,12 @@ _write_action_detail_chunks() {
     for action_key in "Fix PLCC" "PLCC missing" "Needs rebuild"; do
         local entries
         entries="$(jq -r --arg a "$action_key" '
-            .[] | select(.gaps[]?.action == $a)
+            .[] | select(.primaryAction == $a or any(.gaps[]?; .action == $a))
             | .package as $p
-            | [.gaps[] | select(.action == $a) | .version] | join(", ") | "\($p): \(.)"
+            | [.gaps[]? | select(.action == $a) | .version] as $versions
+            | if ($versions | length) > 0 then "\($p): \($versions | join(", "))"
+              elif $a == "PLCC missing" then "\($p): package absent from PLCC"
+              else "\($p): package-level issue" end
         ' "$FILE_REPORT" 2>/dev/null)"
         if [[ -n "$entries" ]]; then
             has_content=true
@@ -984,19 +1000,23 @@ _render_webhook_payload() {
             status("PLCC missing"; $plcc_missing)
           ] + (if $has_catalog then [status("Catalog OK"; $catalog_ok), status("Catalog partial"; $catalog_partial), status("Catalog missing"; $catalog_missing)] else [] end)
           + (if $has_report then ["", "*Actions*", status("Fix PLCC"; $action_fix), status("PLCC missing"; $action_plcc_missing), status("No catalog bundles"; $action_no_bundles), status("Needs rebuild"; $action_rebuild), status("OK"; $action_ok)] else [] end)) | join("\n");
-        {
-          text: ($heading + ". " + $url),
-          blocks: (
-            [{type: "header", text: {type: "plain_text", text: $heading}}]
+        ([{type: "header", text: {type: "plain_text", text: $heading}}]
             + (if $show_summary then
                 [{type: "section", text: {type: "mrkdwn", text: ("*Summary*\n" + summary_markdown)}}]
                 + (if $has_catalog then [{type: "section", text: {type: "mrkdwn", text: "*Operators ready in PLCC and catalog*"}}] + markdown_blocks($ready) else [] end)
               else [] end)
             + (if $show_list then [{type: "section", text: {type: "mrkdwn", text: "*Requested operators*"}}] + code_blocks($operators) else [] end)
-            + (if $has_report and $show_summary then [{type: "section", text: {type: "mrkdwn", text: "*Action details*"}}] + markdown_blocks($actions) else [] end)
-            + [{type: "section", text: {type: "mrkdwn", text: ("<" + $url + "|Open workflow run and download artifacts>")}}]
-          )
-        }' > "$payload_file"
+            + (if $has_report and ($show_summary or $show_list) then [{type: "section", text: {type: "mrkdwn", text: "*Action details*"}}] + markdown_blocks($actions) else [] end)
+            + [{type: "section", text: {type: "mrkdwn", text: ("<" + $url + "|Open workflow run and download artifacts>")}}]) as $blocks
+        | {
+            text: ($heading + ". " + $url),
+            blocks: (if ($blocks | length) > 50 then
+              $blocks[:48] + [
+                {type: "section", text: {type: "mrkdwn", text: "More operator and version details are in the complete artifacts."}},
+                $blocks[-1]
+              ]
+            else $blocks end)
+          }' > "$payload_file"
 }
 
 # Writes a complete, non-secret Slack webhook payload. The GitHub Actions
@@ -1036,6 +1056,7 @@ main() {
     FILE_CATALOG_BUNDLE_VERSIONS="$WORK_DIR/catalog-bundle-versions.txt"
     FILE_CATALOG_DATA="$WORK_DIR/catalog-data.json"
     FILE_REPORT="$WORK_DIR/report.json"
+    FILE_PLCC_SNAPSHOT="$WORK_DIR/plcc-snapshot.json"
     FILE_REQUESTED="$WORK_DIR/requested-packages.txt"
     FILE_PLCC_OPERATORS="$WORK_DIR/plcc-operators.txt"
     FILE_OPERATORS="$WORK_DIR/operators.txt"
