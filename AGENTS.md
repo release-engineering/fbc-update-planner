@@ -14,7 +14,10 @@
 ## Layout
 
 ```
-cmd/plcc2fbc/main.go          CLI entry point — flag parsing, orchestration
+cmd/plcc2fbc/main.go          CLI entry point — command dispatch, shared helpers, exit codes
+cmd/plcc2fbc/convert_command.go  Legacy conversion CLI and pipeline orchestration
+cmd/plcc2fbc/report_command.go   Catalog gap report command and catalog-data loading
+cmd/plcc2fbc/fetch_command.go    Raw PLCC snapshot command
 cmd/plcc2fbc/version.go       Version/commit variables injected via ldflags
 cmd/plcc2fbc/main_test.go     Tests for CLI (run function)
 pkg/plcc/plcc.go              PLCC API client, data types, filtering, sorting
@@ -72,8 +75,12 @@ No separate lint command — CI runs `golangci-lint` with defaults (no `.golangc
 
 ### CLI Flags
 
+The flags below apply to the default conversion invocation; `report` and `fetch` have separate flag sets.
+
 ```
 plcc2fbc [flags] <output-path>
+plcc2fbc fetch [-i <plcc.json>] <snapshot.json>
+plcc2fbc report [-i <plcc.json>] [-p <names>] [--validators <list>] <catalog-data.json> <output.json>
 
 -o, --output        Output format: json, json-pretty, or yaml (default: json)
 -l, --log           Write validation/filtering report to a file (default: stderr)
@@ -85,9 +92,6 @@ plcc2fbc [flags] <output-path>
     --validators    Comma-separated validators to run: labels, or groups all/none/syntax/semantic/catalog (default: all)
     --list-validators  List available validators and exit
     --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory
-    --report        Classify catalog lifecycle gaps instead of generating FBC; requires --catalog-data
-    --catalog-data  Path to catalog data JSON file (used with --report)
-    --save-plcc     Save the raw PLCC snapshot used by this run
 ```
 
 ## Architecture
@@ -113,7 +117,7 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
 With --dump-plcc:
   → catalog.Dump()                  # write filtered PLCC JSON directly, skip FBC generation
 
-With --report:
+With the report command:
   → catalog.LookupValidators()      # resolve validators before dropping OCP product
   → rawCatalog.DropWithoutPackageName()
   → rawCatalog.SortByPackage()
@@ -121,6 +125,8 @@ With --report:
   → classify.Classify()             # compare PLCC vs catalog, classify each operator/version
   → json.Encode(reports)            # write classification.json
 ```
+
+With `plcc-check.sh --catalog-image`, the `fetch` command first saves one raw PLCC snapshot. Conversion and reporting both read it with `-i`.
 
 ### Three pipeline layers
 

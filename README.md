@@ -12,7 +12,11 @@ make build
 
 ```shell
 bin/plcc2fbc [flags] <output-path>
+bin/plcc2fbc fetch [-i <plcc.json>] <snapshot.json>
+bin/plcc2fbc report [-i <plcc.json>] [-p <names>] [--validators <list>] <catalog-data.json> <output.json>
 ```
+
+The flags below apply to the default conversion invocation. `report` and `fetch` accept only the options shown above; each command has its own `--help` output.
 
 | Flag | Description |
 |------|-------------|
@@ -26,9 +30,8 @@ bin/plcc2fbc [flags] <output-path>
 | `--validators <list>` | Comma-separated validators to run: labels (e.g. `REQ-DATE-03`) or groups (`all`, `syntax`, `semantic`, `catalog`). Default: `all` |
 | `--list-validators` | List available validators and exit |
 | `--split` | Write each package to `<dir>/<package>/lifecycle.{json,yaml}`; positional arg is a directory |
-| `--report` | Classify catalog lifecycle gaps instead of generating FBC; requires `--catalog-data` |
-| `--catalog-data <file>` | Path to catalog data JSON file (used with `--report`) |
-| `--save-plcc <file>` | Save the raw PLCC snapshot used for this run (used by `plcc-check.sh` to keep classification consistent) |
+
+`fetch` writes raw PLCC data without filtering; `-i` reads an existing file instead of calling the API. `report` compares that PLCC snapshot with extracted catalog data and writes classification JSON. `plcc-check.sh` uses one fetched snapshot for conversion and reporting.
 
 ## Exit Codes
 

@@ -31,7 +31,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `TestExitCode2_NoFBCOutput` | single-file | none | Untranslatable data → exit code 2, `no FBC data generated` on stderr |
 | `TestExitCode3_MissingPackages` | single-file | all | Missing `-p` package → exit code 3, `requested packages not found` on stderr |
 | `TestDumpPLCC` | `--dump-plcc` | none | Dumps filtered PLCC JSON directly, skipping FBC translation; output is valid JSON containing requested package |
-| `TestSavePLCCSnapshotBeforeFiltering` | `--dump-plcc --save-plcc` | none | The saved snapshot retains products removed from the filtered output |
+| `TestFetchPLCCSnapshotBeforeFiltering` | `fetch -i`, then `--dump-plcc -i` | none | The raw snapshot retains products removed from the filtered output |
 | `TestAllowMissing` | single-file | none | `--allow-missing` downgrades missing `-p` package from exit 3 to exit 0; found package still in output |
 | `TestJSONOutput` | single-file | none | `-o json` produces valid JSON containing the expected package |
 | `TestLogFlag` | single-file | all | `-l` redirects validation report to a file; each line is valid JSON |

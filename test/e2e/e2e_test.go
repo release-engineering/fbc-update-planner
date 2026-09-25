@@ -87,7 +87,7 @@ func runBinary(t *testing.T, args ...string) (stdout, stderr []byte, exitCode in
 	return outBuf.Bytes(), errBuf.Bytes(), 0
 }
 
-func TestSavePLCCSnapshotBeforeFiltering(t *testing.T) {
+func TestFetchPLCCSnapshotBeforeFiltering(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "input.json")
 	snapshot := filepath.Join(dir, "snapshot.json")
@@ -96,9 +96,13 @@ func TestSavePLCCSnapshotBeforeFiltering(t *testing.T) {
 	if err := os.WriteFile(input, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, stderr, exitCode := runBinary(t, "--dump-plcc", "--validators", "none", "-i", input, "--save-plcc", snapshot, output)
+	_, stderr, exitCode := runBinary(t, "fetch", "-i", input, snapshot)
 	if exitCode != 0 {
-		t.Fatalf("exit code %d; stderr: %s", exitCode, stderr)
+		t.Fatalf("fetch exit code %d; stderr: %s", exitCode, stderr)
+	}
+	_, stderr, exitCode = runBinary(t, "--dump-plcc", "--validators", "none", "-i", snapshot, output)
+	if exitCode != 0 {
+		t.Fatalf("conversion exit code %d; stderr: %s", exitCode, stderr)
 	}
 	readCount := func(path string) int {
 		t.Helper()

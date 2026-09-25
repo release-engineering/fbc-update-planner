@@ -24,25 +24,22 @@ import (
 	"strings"
 	"testing"
 
-	flag "github.com/spf13/pflag"
-
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
 var testdataInput = filepath.Join("..", "..", "pkg", "fbc", "testdata", "plcc.json")
 
-func resetFlags(args []string) {
-	flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+func setCLIArgs(args []string) {
 	os.Args = args
 }
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name              string
-		args              []string
-		wantErr           string
-		wantNotFound      bool
-		wantPkgNotFound   bool
+		name            string
+		args            []string
+		wantErr         string
+		wantNotFound    bool
+		wantPkgNotFound bool
 	}{
 		{
 			name:    "missing output path",
@@ -128,9 +125,9 @@ func TestRun(t *testing.T) {
 			wantPkgNotFound: true,
 		},
 		{
-			name:            "allow-missing with all packages missing still fails with no output",
-			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent", "--allow-missing", t.TempDir() + "/out.json"},
-			wantNotFound:    true,
+			name:         "allow-missing with all packages missing still fails with no output",
+			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent", "--allow-missing", t.TempDir() + "/out.json"},
+			wantNotFound: true,
 		},
 		{
 			name:    "split fails on untranslatable package",
@@ -143,48 +140,48 @@ func TestRun(t *testing.T) {
 			wantErr: "failed FBC translation",
 		},
 		{
-			name:    "report requires catalog-data",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", t.TempDir() + "/report.json"},
-			wantErr: "--report requires --catalog-data",
+			name:    "report needs two paths",
+			args:    []string{"plcc2fbc", "report", "-i", testdataInput, "data.json"},
+			wantErr: "report requires catalog data and output paths",
 		},
 		{
-			name:    "catalog-data requires report",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--catalog-data", "data.json", t.TempDir() + "/out.json"},
-			wantErr: "--catalog-data requires --report",
+			name:    "report rejects extra paths",
+			args:    []string{"plcc2fbc", "report", "-i", testdataInput, "data.json", "out.json", "extra.json"},
+			wantErr: "report requires catalog data and output paths",
 		},
 		{
-			name:    "report and dump-plcc are mutually exclusive",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--dump-plcc", "--catalog-data", "data.json", t.TempDir() + "/out.json"},
-			wantErr: "mutually exclusive",
+			name:    "report rejects conversion flags",
+			args:    []string{"plcc2fbc", "report", "--split", "data.json", t.TempDir() + "/out.json"},
+			wantErr: "unknown flag",
 		},
 		{
-			name:    "report and split are mutually exclusive",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--split", "--catalog-data", "data.json", t.TempDir()},
-			wantErr: "mutually exclusive",
+			name:    "legacy conversion rejects report flag",
+			args:    []string{"plcc2fbc", "--report", t.TempDir() + "/out.json"},
+			wantErr: "unknown flag",
 		},
 		{
-			name:    "report and permissive are mutually exclusive",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--permissive", "--catalog-data", "data.json", t.TempDir() + "/out.json"},
-			wantErr: "mutually exclusive",
+			name:    "fetch needs output path",
+			args:    []string{"plcc2fbc", "fetch", "-i", testdataInput},
+			wantErr: "fetch requires a snapshot output path",
 		},
 		{
-			name:    "report and allow-missing are mutually exclusive",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--allow-missing", "--catalog-data", "data.json", t.TempDir() + "/out.json"},
-			wantErr: "mutually exclusive",
+			name:    "fetch rejects extra paths",
+			args:    []string{"plcc2fbc", "fetch", "-i", testdataInput, "snapshot.json", "extra.json"},
+			wantErr: "fetch requires a snapshot output path",
 		},
 		{
-			name:    "report and log are mutually exclusive",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", "data.json", "-l", t.TempDir() + "/log.jsonl", t.TempDir() + "/out.json"},
-			wantErr: "mutually exclusive",
+			name:    "fetch reports bad input file",
+			args:    []string{"plcc2fbc", "fetch", "-i", "/nonexistent/plcc.json", t.TempDir() + "/snapshot.json"},
+			wantErr: "reading PLCC file",
 		},
 		{
-			name:    "report and output are mutually exclusive",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", "data.json", "-o", "yaml", t.TempDir() + "/out.json"},
-			wantErr: "mutually exclusive",
+			name:    "fetch rejects report flags",
+			args:    []string{"plcc2fbc", "fetch", "--validators", "none", t.TempDir() + "/snapshot.json"},
+			wantErr: "unknown flag",
 		},
 		{
 			name:    "catalog-data non-existent file",
-			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", filepath.Join(t.TempDir(), "no-such-file.json"), t.TempDir() + "/out.json"},
+			args:    []string{"plcc2fbc", "report", "-i", testdataInput, filepath.Join(t.TempDir(), "no-such-file.json"), t.TempDir() + "/out.json"},
 			wantErr: "reading catalog data",
 		},
 		{
@@ -192,7 +189,7 @@ func TestRun(t *testing.T) {
 			args: func() []string {
 				badFile := filepath.Join(t.TempDir(), "bad.json")
 				_ = os.WriteFile(badFile, []byte("{not valid json"), 0o644)
-				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", badFile, t.TempDir() + "/out.json"}
+				return []string{"plcc2fbc", "report", "-i", testdataInput, badFile, t.TempDir() + "/out.json"}
 			}(),
 			wantErr: "decoding catalog data",
 		},
@@ -200,7 +197,7 @@ func TestRun(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resetFlags(tt.args)
+			setCLIArgs(tt.args)
 
 			err := run()
 			if err == nil {
@@ -229,8 +226,21 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestCommandHelp(t *testing.T) {
+	for _, args := range [][]string{
+		{"plcc2fbc", "--help"},
+		{"plcc2fbc", "report", "--help"},
+		{"plcc2fbc", "fetch", "--help"},
+	} {
+		setCLIArgs(args)
+		if err := run(); err != nil {
+			t.Errorf("%v: help returned error: %v", args, err)
+		}
+	}
+}
+
 func TestVersion(t *testing.T) {
-	resetFlags([]string{"plcc2fbc", "--version"})
+	setCLIArgs([]string{"plcc2fbc", "--version"})
 	if err := run(); err != nil {
 		t.Fatalf("--version returned unexpected error: %v", err)
 	}
@@ -501,11 +511,11 @@ func TestRunSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "report mode produces classification JSON",
+			name: "report command produces classification JSON",
 			args: func(out string) []string {
 				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
 				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{"aws-efs-csi-driver-operator":["4.16","4.17"]},"bundleVersions":{"aws-efs-csi-driver-operator":["4.16","4.17"]}}`), 0o644)
-				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", cdFile, out}
+				return []string{"plcc2fbc", "report", "-i", testdataInput, cdFile, out}
 			},
 			checks: func(t *testing.T, outFile string) {
 				data, err := os.ReadFile(outFile)
@@ -524,11 +534,11 @@ func TestRunSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "report mode with package filter",
+			name: "report command with package filter",
 			args: func(out string) []string {
 				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
 				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{"aws-efs-csi-driver-operator":["4.16"]},"bundleVersions":{"aws-efs-csi-driver-operator":["4.16"]}}`), 0o644)
-				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", cdFile, "-p", "aws-efs-csi-driver-operator", out}
+				return []string{"plcc2fbc", "report", "-i", testdataInput, "-p", "aws-efs-csi-driver-operator", cdFile, out}
 			},
 			checks: func(t *testing.T, outFile string) {
 				data, err := os.ReadFile(outFile)
@@ -548,7 +558,7 @@ func TestRunSuccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outFile := filepath.Join(t.TempDir(), "output")
-			resetFlags(tt.args(outFile))
+			setCLIArgs(tt.args(outFile))
 
 			if err := run(); err != nil {
 				t.Fatalf("unexpected error: %v", err)

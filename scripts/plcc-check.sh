@@ -177,6 +177,22 @@ build_plcc2fbc() {
     make -C "$ROOT_DIR" build --quiet
 }
 
+# Capture one raw PLCC snapshot for both conversion and classification.
+prepare_plcc_snapshot() {
+    [[ -z "$g_catalog_image" ]] && return 0
+
+    local fetch_args=(fetch)
+    if [[ -n "$g_input_file" ]]; then
+        fetch_args+=(-i "$g_input_file")
+    fi
+    fetch_args+=("$FILE_PLCC_SNAPSHOT")
+    if ! "$ROOT_DIR/bin/plcc2fbc" "${fetch_args[@]}" >"$WORK_DIR/fetch-stdout.log" 2>"$WORK_DIR/fetch-stderr.log"; then
+        log_error "fetching PLCC snapshot failed"
+        cat "$WORK_DIR/fetch-stderr.log" >&2
+        exit 1
+    fi
+}
+
 # Reads g_operators_file into g_operators, skipping blank/comment lines.
 _read_operators_file() {
     if [[ ! -f "$g_operators_file" ]]; then
@@ -214,13 +230,10 @@ _read_operators_file() {
 # Builds g_plcc2fbc_args, runs the binary, and aborts on fatal errors.
 run_plcc2fbc() {
     g_plcc2fbc_args=(-o yaml -l "$FILE_VAL")
-    if [[ -n "$g_input_file" ]]; then
-        g_plcc2fbc_args+=(-i "$g_input_file")
-    fi
     if [[ -n "$g_catalog_image" ]]; then
-        # Preserve the exact input used for classification. A second fetch
-        # or a changed input file could give contradictory advice.
-        g_plcc2fbc_args+=(--save-plcc "$FILE_PLCC_SNAPSHOT")
+        g_plcc2fbc_args+=(-i "$FILE_PLCC_SNAPSHOT")
+    elif [[ -n "$g_input_file" ]]; then
+        g_plcc2fbc_args+=(-i "$g_input_file")
     fi
 
     g_operators_number="all"
@@ -316,7 +329,7 @@ fetch_catalog_packages() {
 }
 
 # Converts the TSV lifecycle/bundle version files into the JSON structure
-# expected by plcc2fbc --report --catalog-data.
+# expected by the plcc2fbc report command.
 _build_catalog_data_json() {
     local lifecycle_json bundle_json lifecycle_packages_json
     lifecycle_packages_json="$(jq -Rn '[inputs | select(length > 0)]' "$FILE_CATALOG")"
@@ -541,12 +554,11 @@ collect_results() {
     fi
 }
 
-# Runs plcc2fbc --report to classify catalog lifecycle gaps by action.
+# Runs plcc2fbc report to classify catalog lifecycle gaps by action.
 run_classification() {
     [[ -z "$g_catalog_image" ]] && return
 
-    local report_args=(--report --catalog-data "$FILE_CATALOG_DATA")
-    report_args+=(-i "$FILE_PLCC_SNAPSHOT")
+    local report_args=(report -i "$FILE_PLCC_SNAPSHOT")
     if [[ -n "$g_plcc_validators" ]]; then
         report_args+=(--validators "$g_plcc_validators")
     fi
@@ -558,7 +570,7 @@ run_classification() {
 
     local exit_code
     set +e
-    "$ROOT_DIR/bin/plcc2fbc" "${report_args[@]}" "$FILE_REPORT" >"$WORK_DIR/report-stdout.log" 2>"$WORK_DIR/report-stderr.log"
+    "$ROOT_DIR/bin/plcc2fbc" "${report_args[@]}" "$FILE_CATALOG_DATA" "$FILE_REPORT" >"$WORK_DIR/report-stdout.log" 2>"$WORK_DIR/report-stderr.log"
     exit_code=$?
     set -e
 
@@ -1069,6 +1081,7 @@ main() {
     mkdir -p "$g_outdir"
 
     build_plcc2fbc
+    prepare_plcc_snapshot
     run_plcc2fbc
     g_catalog_packages=()
     fetch_catalog_packages
