@@ -20,7 +20,7 @@ After PLCC data is fetched, each product passes through four stages:
 | Condition | Stage | Effect |
 |---|---|---|
 | Product has no package name | PLCC filtering | Silently skipped |
-| Requested `-p` package not found | PLCC filtering | Error (exit 3); with `--allow-missing` warning only |
+| Requested `-p` package not found | PLCC filtering | Error (exit 3) in `plcc2fbc`; with `--allow-missing` warning only. The separate checker classifies missing packages as `PLCC missing` (no error). |
 | Package name appears in multiple products | PLCC catalog validation | All products containing the duplicated name removed (comma-separated names are expanded); with `--permissive` warning only |
 | Invalid version name, timestamp, or OCP format | FBC converter pipeline | Entire package rejected |
 | Phase with nil start or end date | FBC filter pipeline | Phase silently removed |
@@ -29,7 +29,7 @@ After PLCC data is fetched, each product passes through four stages:
 
 ## PLCC-Level Validation
 
-Before the FBC pipelines run, `main.go` calls PLCC-level validators on each raw `plcc.Product`. These validators live in `pkg/plcc/validation.go` alongside the data types they check. By default, failing packages are **filtered out** and logged as structured JSON to stderr. Use `--permissive` to keep failing packages in the output (warnings only). Use `--validators` to select which validators to run (by label or group), and `--list-validators` to see available options.
+Before the FBC pipelines run, the shared validation pipeline calls PLCC-level validators on each raw `plcc.Product`. These validators live in `pkg/plcc/validation.go` alongside the data types they check. By default, failing packages are **filtered out** and logged as structured JSON to stderr. Use `--permissive` to keep failing packages in the converter output (warnings only). Use `--validators` to select which validators to run (by label or group), and `--list-validators` to see available options.
 
 Validators are split into three groups: `SyntaxValidators()` (data format/structure), `SemanticValidators()` (business/lifecycle rules), and `catalog` (cross-product checks). `DefaultValidators()` composes syntax + semantic; `DefaultCatalogValidators()` returns catalog-level checks. All three groups are included in `--validators all` (the default). Catalog-level checks run via `catalog.Validate()`.
 

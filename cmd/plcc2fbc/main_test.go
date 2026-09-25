@@ -23,25 +23,22 @@ import (
 	"strings"
 	"testing"
 
-	flag "github.com/spf13/pflag"
-
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
 var testdataInput = filepath.Join("..", "..", "pkg", "fbc", "testdata", "plcc.json")
 
-func resetFlags(args []string) {
-	flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+func setCLIArgs(args []string) {
 	os.Args = args
 }
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name              string
-		args              []string
-		wantErr           string
-		wantNotFound      bool
-		wantPkgNotFound   bool
+		name            string
+		args            []string
+		wantErr         string
+		wantNotFound    bool
+		wantPkgNotFound bool
 	}{
 		{
 			name:    "missing output path",
@@ -127,9 +124,9 @@ func TestRun(t *testing.T) {
 			wantPkgNotFound: true,
 		},
 		{
-			name:            "allow-missing with all packages missing still fails with no output",
-			args:            []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent", "--allow-missing", t.TempDir() + "/out.json"},
-			wantNotFound:    true,
+			name:         "allow-missing with all packages missing still fails with no output",
+			args:         []string{"plcc2fbc", "-i", testdataInput, "-p", "nonexistent", "--allow-missing", t.TempDir() + "/out.json"},
+			wantNotFound: true,
 		},
 		{
 			name:    "split fails on untranslatable package",
@@ -141,11 +138,16 @@ func TestRun(t *testing.T) {
 			args:    []string{"plcc2fbc", "-i", testdataInput, "-o", "yaml", "--split", t.TempDir()},
 			wantErr: "failed FBC translation",
 		},
+		{
+			name:    "conversion rejects report flag",
+			args:    []string{"plcc2fbc", "--report", t.TempDir() + "/out.json"},
+			wantErr: "unknown flag",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resetFlags(tt.args)
+			setCLIArgs(tt.args)
 
 			err := run()
 			if err == nil {
@@ -174,8 +176,15 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestCommandHelp(t *testing.T) {
+	setCLIArgs([]string{"plcc2fbc", "--help"})
+	if err := run(); err != nil {
+		t.Errorf("help returned error: %v", err)
+	}
+}
+
 func TestVersion(t *testing.T) {
-	resetFlags([]string{"plcc2fbc", "--version"})
+	setCLIArgs([]string{"plcc2fbc", "--version"})
 	if err := run(); err != nil {
 		t.Fatalf("--version returned unexpected error: %v", err)
 	}
@@ -450,7 +459,7 @@ func TestRunSuccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outFile := filepath.Join(t.TempDir(), "output")
-			resetFlags(tt.args(outFile))
+			setCLIArgs(tt.args(outFile))
 
 			if err := run(); err != nil {
 				t.Fatalf("unexpected error: %v", err)

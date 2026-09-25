@@ -1,6 +1,6 @@
 # End-to-End Tests
 
-End-to-end tests exercise the full `plcc2fbc` CLI pipeline — flag parsing, PLCC loading, validation, FBC translation, filtering, and file I/O — by building the binary and invoking it as a subprocess against golden reference files. `test/e2e/plcc_check_test.go` additionally covers `scripts/plcc-check.sh`, the batch runner built on top of the binary.
+End-to-end tests exercise both Go CLIs against local PLCC and catalog fixtures. `plcc2fbc` converts lifecycle data; `plcc-check` owns assessment and reporting, with `scripts/plcc-check.sh` as its compatibility wrapper.
 
 ---
 
@@ -8,7 +8,7 @@ End-to-end tests exercise the full `plcc2fbc` CLI pipeline — flag parsing, PLC
 
 `TestMain` compiles `plcc2fbc` from source into a temporary directory once per test run. All test functions invoke the compiled binary via the `runBinary` helper, which captures stdout, stderr, and the exit code. Output is compared byte-for-byte against reference files in `test/e2e/testdata/`.
 
-`test/e2e/plcc_check_test.go` instead invokes `scripts/plcc-check.sh` directly via `runPlccCheck` — the script builds its own copy of the binary (via `make build`) and requires `scripts/plcc-check.sh`'s `-i <file>` flag to point it at a fixture instead of the live PLCC API.
+`test/e2e/plcc_check_test.go` invokes `scripts/plcc-check.sh` via `runPlccCheck`. The wrapper builds `bin/plcc-check` with `make plcc-check`; `-i <file>` supplies a local PLCC fixture instead of using the live API.
 
 The e2e package uses a `//go:build e2e` build tag so that `go test ./...` (i.e. `make test`) does not include it. Run with `make e2e` (which passes `-tags=e2e`) to execute the suite.
 
@@ -31,6 +31,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `TestExitCode2_NoFBCOutput` | single-file | none | Untranslatable data → exit code 2, `no FBC data generated` on stderr |
 | `TestExitCode3_MissingPackages` | single-file | all | Missing `-p` package → exit code 3, `requested packages not found` on stderr |
 | `TestDumpPLCC` | `--dump-plcc` | none | Dumps filtered PLCC JSON directly, skipping FBC translation; output is valid JSON containing requested package |
+| `TestDumpPLCCFiltersUnnamedProducts` | `--dump-plcc -i` | none | Filtered PLCC output excludes products without package names |
 | `TestAllowMissing` | single-file | none | `--allow-missing` downgrades missing `-p` package from exit 3 to exit 0; found package still in output |
 | `TestJSONOutput` | single-file | none | `-o json` produces valid JSON containing the expected package |
 | `TestLogFlag` | single-file | all | `-l` redirects validation report to a file; each line is valid JSON |
@@ -42,10 +43,13 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | Test | Mode | What It Verifies |
 |------|------|-------------------|
 | `TestPlccCheckOperatorsFile` | `plcc-check-operators.txt` (4 packages: pass/issues/missing/duplicate) | `summary.txt`, `validation.jsonl`, `fbc-output.yaml`, and `slog.json` message sequence match golden fixtures |
-| `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING statuses, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture |
+| `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING statuses, Action classification section, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture; `classification.json` written |
+| `TestPlccCheckBundleOnlyPackageInAllOperatorsReport` | Fake local `opm` output with one bundle-only package | Package appears in all-operator summary, classification JSON, and Slack action details |
 | `TestPlccCheckCatalogVersionCoverage` | 5-operator file + `--catalog-image testdata/catalog-fbc-versions` | Per-version coverage: full coverage → `OK`, partial → `X/Y`, no lifecycle → `MISSING`, no bundles → `OK`; PLCC OK + catalog partial → no done marker; CATALOG PARTIAL summary line; done marker only on full OK |
 | `TestPlccCheckWebhook` | `--webhook list`, `summary`, and `summary,list` | Slack payload contains exactly the selected Markdown sections, catalog-ready indicators (including partial), and workflow link |
 | `TestPlccCheckWebhookRejectsUnknownSection` | invalid `--webhook` section | Unsupported webhook sections fail before the assessment runs |
+| `TestPlccCheckPLCCOnlySkipsTranslation` | `--plcc`, no catalog | PLCC-only assessment writes the filtered dump and skips FBC conversion |
+| `TestPlccCheckOpmFailureIsFatal` | failing local `opm` | A failed catalog render produces a fatal error and no classification artifact |
 | `TestPlccCheckAllPackages` | no operators file (full dataset), `--validators none` | `fbc-output.yaml` matches `reference-fbc.yaml` byte-for-byte; `summary.txt` reports the expected pass/fail counts |
 
 ---
@@ -63,7 +67,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `plcc-check/operators-validation.jsonl` | ~400 B | Expected `validation.jsonl` for `TestPlccCheckOperatorsFile`. |
 | `catalog-fbc/` | ~150 B | Local FBC directory fixture for `TestPlccCheckCatalogPresence`: contains lifecycle data for `aws-efs-csi-driver-operator` only (no bundles), so `opm render` against it exercises a catalog-hit (OK, zero bundles) and catalog-misses. |
 | `catalog-fbc-versions/` | ~2 KB | Local FBC directory fixture for `TestPlccCheckCatalogVersionCoverage`: contains lifecycle + `olm.bundle` entries for five operators covering full coverage (OK), partial coverage (X/Y), no lifecycle (MISSING), no bundles (OK), and PLCC OK + catalog partial (exercises the done-marker guard). |
-| `plcc-check/catalog-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckCatalogPresence`. Both `$OUTDIR` and the `--catalog-image` path are normalized before comparison. |
+| `plcc-check/catalog-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckCatalogPresence`. Includes PLCC/CATALOG table with OK/MISSING statuses and the Action classification section. Both `$OUTDIR` and the `--catalog-image` path are normalized before comparison. |
 
 ---
 
@@ -104,7 +108,7 @@ sed -e "s#$out#\$OUTDIR#g" -e "s#test/e2e/testdata/catalog-fbc#\$CATALOG_IMAGE#g
     "$out/summary.txt" > test/e2e/testdata/plcc-check/catalog-summary.txt
 ```
 
-Review the diff carefully — these are hand-reviewed fixtures, not a bulk snapshot. Run this if `TestPlccCheckOperatorsFile` or `TestPlccCheckCatalogPresence` legitimately change behavior (e.g. a change to `scripts/plcc-check.sh` or the validators it exercises).
+Review the diff carefully — these are hand-reviewed fixtures, not a bulk snapshot. Run this if the Go checker or its validators intentionally change summary output.
 
 If `TestPlccCheckAllPackages`'s expected counts (`Total operators`, `PLCC OK`, `PLCC INVALID`, `PLCC MISSING`) change, update the literal strings in `test/e2e/plcc_check_test.go` directly — there's no golden file for that test's `summary.txt`, since diffing the full ~150-package file isn't worth the review overhead.
 
@@ -118,7 +122,7 @@ If `TestPlccCheckAllPackages`'s expected counts (`Total operators`, `PLCC OK`, `
 | `extractPackageName(yamlDoc)` | Parses the `package:` field from a YAML document string. |
 | `splitYAMLReference(t, path)` | Splits a multi-document YAML file on `---\n` delimiters into a `map[string]string` keyed by package name. |
 | `testSplit(t, referencePath, extraArgs...)` | Shared logic for split-mode tests: parses the reference, runs the binary with `--split`, and compares each per-package output file. |
-| `runPlccCheck(t, args...)` | Executes `scripts/plcc-check.sh` (in `plcc_check_test.go`), returns stdout, stderr, and exit code. Longer default timeout than `runBinary` since the script rebuilds the binary itself. |
+| `runPlccCheck(t, args...)` | Executes the compatibility wrapper, returning stdout, stderr, and exit code. The wrapper rebuilds the Go checker. |
 | `slogField(t, line, field)` | Parses one `slog.json` line and returns a named field, failing the test if the line isn't valid JSON or the field is absent. Used to check specific counts without requiring an exact byte-for-byte match (the `time` and `version` fields vary on every run). |
 | `assertFilesEqual(t, gotPath, wantPath)` | Compares a generated artifact byte-for-byte with its golden file. |
 
