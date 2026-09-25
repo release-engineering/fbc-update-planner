@@ -527,6 +527,48 @@ func TestClassifyPLCCStatusDuplicate(t *testing.T) {
 	}
 }
 
+func TestClassifyPLCCStatusDuplicateNonIndexedVersion(t *testing.T) {
+	// Two products share the same package name. The bundle version "1.1"
+	// exists only in the second product (the non-indexed one, since
+	// buildPLCCIndex resolves duplicates to the first match). The
+	// catalogRejections check must fire before the version-existence check
+	// so this version is classified as "Fix PLCC" (not "PLCC missing").
+	catalog := &plcc.Catalog{Data: []plcc.Product{
+		validProduct("op-dup", "1.0"),
+		validProduct("op-dup", "1.1"),
+	}}
+	cd := &CatalogData{
+		LifecycleVersions: map[string]map[string]bool{},
+		BundleVersions: map[string]map[string]bool{
+			"op-dup": {"1.1": true},
+		},
+	}
+	reports := Classify(Input{
+		Catalog:           catalog,
+		CatalogData:       cd,
+		Packages:          []string{"op-dup"},
+		CatalogValidators: []plcc.CatalogValidator{plcc.ValidateNoDuplicates},
+	})
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+	if reports[0].PLCC != PLCCStatusDuplicate {
+		t.Errorf("plcc status = %q, want %q", reports[0].PLCC, PLCCStatusDuplicate)
+	}
+	if reports[0].PrimaryAction != ActionFixPLCC {
+		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionFixPLCC)
+	}
+	if len(reports[0].Gaps) != 1 {
+		t.Fatalf("got %d gaps, want 1", len(reports[0].Gaps))
+	}
+	if reports[0].Gaps[0].Action != ActionFixPLCC {
+		t.Errorf("gap action = %q, want %q", reports[0].Gaps[0].Action, ActionFixPLCC)
+	}
+	if len(reports[0].Gaps[0].Reasons) == 0 {
+		t.Error("expected reasons for duplicate gap")
+	}
+}
+
 func TestClassifyMissingVersionWithInvalidProduct(t *testing.T) {
 	// A product with one valid version (1.0) and an invalid format. The
 	// bundle includes version 1.1 which is absent from PLCC. The missing

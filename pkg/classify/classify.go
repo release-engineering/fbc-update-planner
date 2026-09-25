@@ -397,6 +397,19 @@ func classifyVersionGaps(
 }
 
 // classifyOneVersion determines the action for a single missing version.
+//
+// Check hierarchy (order matters):
+//  1. No product → PLCC missing
+//  2. Catalog rejections (e.g. duplicate) → Fix PLCC, regardless of version
+//  3. Version absent from indexed product → PLCC missing
+//  4. Product-level validation failure → Fix PLCC
+//  5. FBC translation failure → Fix PLCC
+//  6. Otherwise → Needs rebuild
+//
+// Catalog rejections must precede the version-existence check because
+// buildPLCCIndex resolves duplicates to the first-match product. A version
+// that exists only in the non-indexed duplicate would otherwise be
+// misclassified as "PLCC missing" instead of "Fix PLCC".
 func classifyOneVersion(
 	pkg, version string,
 	product *plcc.Product,
@@ -408,9 +421,16 @@ func classifyOneVersion(
 		return VersionGap{Version: version, Action: ActionPLCCMissing}
 	}
 
-	// Check if the specific version exists in PLCC data before applying
-	// product-level checks. A version absent from PLCC is "PLCC missing"
-	// regardless of whether the product has other validation issues.
+	// Check for catalog-level rejection (e.g., duplicate package name).
+	// This must precede version-existence checks: when a package appears in
+	// multiple PLCC products, the index resolves to only one. A version
+	// absent from the indexed product but present in a duplicate would be
+	// wrongly classified as "PLCC missing" if we checked existence first.
+	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
+		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: reasons}
+	}
+
+	// Check if the specific version exists in PLCC data.
 	var plccVersion *plcc.Version
 	for i := range product.Versions {
 		if product.Versions[i].Name == version {
@@ -421,11 +441,6 @@ func classifyOneVersion(
 
 	if plccVersion == nil {
 		return VersionGap{Version: version, Action: ActionPLCCMissing}
-	}
-
-	// Check for catalog-level rejection (e.g., duplicate package name).
-	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
-		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: reasons}
 	}
 
 	// Check cached per-product validation results.

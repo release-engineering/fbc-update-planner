@@ -504,9 +504,9 @@ func runReport(catalog *plcc.Catalog, catalogDataPath, packages, writePath strin
 
 // parseValidatorNames splits a comma-separated flag value into trimmed,
 // non-empty validator names.
-func parseValidatorNames(flag string) []string {
+func parseValidatorNames(value string) []string {
 	var names []string
-	for _, name := range strings.Split(flag, ",") {
+	for _, name := range strings.Split(value, ",") {
 		name = strings.TrimSpace(name)
 		if name != "" {
 			names = append(names, name)
