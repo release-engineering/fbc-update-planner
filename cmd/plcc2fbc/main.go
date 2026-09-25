@@ -114,6 +114,15 @@ func run() (err error) {
 	if !reportMode && catalogDataPath != "" {
 		return fmt.Errorf("--catalog-data requires --report")
 	}
+	if reportMode && permissive {
+		return fmt.Errorf("--report and --permissive are mutually exclusive")
+	}
+	if reportMode && allowMissing {
+		return fmt.Errorf("--report and --allow-missing are mutually exclusive")
+	}
+	if reportMode && logPath != "" {
+		return fmt.Errorf("--report and --log are mutually exclusive")
+	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	slog.Info("plcc2fbc starting", "version", versionString(), "validators", validatorsFlag)
@@ -140,14 +149,7 @@ func run() (err error) {
 		// names — init functions (e.g. initPlatformAlignedPhases) need
 		// the full catalog to look up cross-product context like OCP
 		// lifecycle data.
-		var validatorNames []string
-		for _, name := range strings.Split(validatorsFlag, ",") {
-			name = strings.TrimSpace(name)
-			if name != "" {
-				validatorNames = append(validatorNames, name)
-			}
-		}
-		validators, catalogValidators, valErr := rawCatalog.LookupValidators(validatorNames...)
+		validators, catalogValidators, valErr := rawCatalog.LookupValidators(parseValidatorNames(validatorsFlag)...)
 		if valErr != nil {
 			return fmt.Errorf("invalid --validators flag: %w", valErr)
 		}
@@ -314,14 +316,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 
 	// Validators can have init functions that require an already loaded catalog,
 	// so collect them only after the catalog is loaded.
-	var validatorNames []string
-	for _, name := range strings.Split(validatorsFlag, ",") {
-		name = strings.TrimSpace(name)
-		if name != "" {
-			validatorNames = append(validatorNames, name)
-		}
-	}
-	validators, catalogValidators, err := catalog.LookupValidators(validatorNames...)
+	validators, catalogValidators, err := catalog.LookupValidators(parseValidatorNames(validatorsFlag)...)
 	if err != nil {
 		return nil, fmt.Errorf("invalid --validators flag: %w", err)
 	}
@@ -449,9 +444,11 @@ func runReport(catalog *plcc.Catalog, catalogDataPath, packages, writePath strin
 
 	var pkgList []string
 	if packages != "" {
+		seen := make(map[string]bool)
 		for _, name := range strings.Split(packages, ",") {
 			name = strings.TrimSpace(name)
-			if name != "" {
+			if name != "" && !seen[name] {
+				seen[name] = true
 				pkgList = append(pkgList, name)
 			}
 		}
@@ -499,6 +496,19 @@ func runReport(catalog *plcc.Catalog, catalogDataPath, packages, writePath strin
 
 	slog.Info("wrote classification report", "count", len(reports), "path", writePath)
 	return nil
+}
+
+// parseValidatorNames splits a comma-separated flag value into trimmed,
+// non-empty validator names.
+func parseValidatorNames(flag string) []string {
+	var names []string
+	for _, name := range strings.Split(flag, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func validateOutputPath(path string, isDir bool) error {

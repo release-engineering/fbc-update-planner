@@ -245,8 +245,17 @@ func classifyPackage(
 		return r
 	}
 
+	// Cache per-product validation results to avoid re-running validators
+	// for every gap (N+1 evaluations).
+	var productReasons []string
+	if product != nil && len(validators) > 0 {
+		if _, ok := catalogRejections[pkg]; !ok {
+			productReasons = plcc.ValidateProduct(*product, validators...)
+		}
+	}
+
 	// Classify each missing version.
-	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogRejections, validators)
+	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogRejections, productReasons)
 
 	// Determine primary action: highest priority among all gaps.
 	r.PrimaryAction = primaryAction(r)
@@ -283,18 +292,15 @@ func computePLCCStatus(
 }
 
 // computeCatalogStatus returns the catalog coverage string.
-// Returns "N/A" when neither lifecycle nor bundle data exists for the package,
+// Returns "N/A" when bundle data is absent (no bundles to compare against),
 // "MISSING" when bundles exist but no lifecycle entry, "OK" for full coverage,
 // or "X/Y" for partial coverage.
 func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) string {
-	if len(lifecycleVersions) == 0 && len(bundleVersions) == 0 {
+	if len(bundleVersions) == 0 {
 		return "N/A"
 	}
 	if len(lifecycleVersions) == 0 {
 		return "MISSING"
-	}
-	if len(bundleVersions) == 0 {
-		return "OK"
 	}
 	covered := 0
 	for v := range bundleVersions {
@@ -337,6 +343,8 @@ func versionLess(a, b string) bool {
 	return aMin < bMin
 }
 
+// parseVersionParts splits a "MAJOR.MINOR" string into its integer components.
+// Returns (0, 0) if the string is not in the expected format.
 func parseVersionParts(s string) (int, int) {
 	parts := strings.SplitN(s, ".", 2)
 	if len(parts) != 2 {
@@ -359,11 +367,11 @@ func classifyVersionGaps(
 	missingVersions []string,
 	product *plcc.Product,
 	catalogRejections plcc.CatalogRejections,
-	validators []plcc.Validator,
+	productReasons []string,
 ) []VersionGap {
 	gaps := make([]VersionGap, 0, len(missingVersions))
 	for _, ver := range missingVersions {
-		gap := classifyOneVersion(pkg, ver, product, catalogRejections, validators)
+		gap := classifyOneVersion(pkg, ver, product, catalogRejections, productReasons)
 		gaps = append(gaps, gap)
 	}
 	return gaps
@@ -374,27 +382,16 @@ func classifyOneVersion(
 	pkg, version string,
 	product *plcc.Product,
 	catalogRejections plcc.CatalogRejections,
-	validators []plcc.Validator,
+	productReasons []string,
 ) VersionGap {
 	// If PLCC product is missing entirely, all versions are PLCC missing.
 	if product == nil {
 		return VersionGap{Version: version, Action: ActionPLCCMissing}
 	}
 
-	// Check for catalog-level rejection (e.g., duplicate package name).
-	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
-		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: reasons}
-	}
-
-	// Check for package-level PLCC validation failure.
-	if len(validators) > 0 {
-		reasons := plcc.ValidateProduct(*product, validators...)
-		if len(reasons) > 0 {
-			return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: reasons}
-		}
-	}
-
-	// Check if the specific version exists in PLCC data.
+	// Check if the specific version exists in PLCC data before applying
+	// product-level checks. A version absent from PLCC is "PLCC missing"
+	// regardless of whether the product has other validation issues.
 	var plccVersion *plcc.Version
 	for i := range product.Versions {
 		if product.Versions[i].Name == version {
@@ -405,6 +402,16 @@ func classifyOneVersion(
 
 	if plccVersion == nil {
 		return VersionGap{Version: version, Action: ActionPLCCMissing}
+	}
+
+	// Check for catalog-level rejection (e.g., duplicate package name).
+	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
+		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: reasons}
+	}
+
+	// Check cached per-product validation results.
+	if len(productReasons) > 0 {
+		return VersionGap{Version: version, Action: ActionFixPLCC, Reasons: productReasons}
 	}
 
 	// The version exists in valid PLCC data. Try FBC translation.

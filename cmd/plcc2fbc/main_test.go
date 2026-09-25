@@ -162,6 +162,21 @@ func TestRun(t *testing.T) {
 			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--split", "--catalog-data", "data.json", t.TempDir()},
 			wantErr: "mutually exclusive",
 		},
+		{
+			name:    "report and permissive are mutually exclusive",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--permissive", "--catalog-data", "data.json", t.TempDir() + "/out.json"},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name:    "report and allow-missing are mutually exclusive",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--allow-missing", "--catalog-data", "data.json", t.TempDir() + "/out.json"},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name:    "report and log are mutually exclusive",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", "data.json", "-l", t.TempDir() + "/log.jsonl", t.TempDir() + "/out.json"},
+			wantErr: "mutually exclusive",
+		},
 	}
 
 	for _, tt := range tests {
@@ -486,26 +501,6 @@ func TestRunSuccess(t *testing.T) {
 				}
 				if !strings.Contains(string(data), "primaryAction") {
 					t.Error("report should contain primaryAction field")
-				}
-			},
-		},
-		{
-			name: "report mode does not truncate log file",
-			args: func(out string) []string {
-				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
-				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{},"bundleVersions":{}}`), 0o644)
-				logFile := filepath.Join(filepath.Dir(out), "existing.log")
-				_ = os.WriteFile(logFile, []byte("existing content\n"), 0o644)
-				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", cdFile, "-l", logFile, out}
-			},
-			checks: func(t *testing.T, outFile string) {
-				logFile := filepath.Join(filepath.Dir(outFile), "existing.log")
-				data, err := os.ReadFile(logFile)
-				if err != nil {
-					t.Fatalf("reading log file: %v", err)
-				}
-				if string(data) != "existing content\n" {
-					t.Errorf("log file was modified in report mode; got %q, want %q", string(data), "existing content\n")
 				}
 			},
 		},

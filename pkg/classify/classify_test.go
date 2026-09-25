@@ -178,7 +178,20 @@ func TestClassifyPLCCMissingVersion(t *testing.T) {
 }
 
 func TestClassifyFixPLCCValidatorRejection(t *testing.T) {
-	catalog := &plcc.Catalog{Data: []plcc.Product{invalidProduct("op-bad")}}
+	// Product has both a well-named version "1.0" and a "bad-version"
+	// that fails syntax validation. The bundle version "1.0" is present
+	// in PLCC, but the product-level validation failure means it should
+	// be classified as "Fix PLCC".
+	badProduct := plcc.Product{
+		Name:    "Product op-bad",
+		Package: "op-bad",
+		Versions: []plcc.Version{
+			{Name: "bad-version", Phases: []plcc.Phase{}},
+			{Name: "1.0", Phases: []plcc.Phase{}},
+		},
+		IsOperator: true,
+	}
+	catalog := &plcc.Catalog{Data: []plcc.Product{badProduct}}
 	cd := &CatalogData{
 		LifecycleVersions: map[string]map[string]bool{},
 		BundleVersions: map[string]map[string]bool{
@@ -293,6 +306,9 @@ func TestClassifyNoCatalogBundles(t *testing.T) {
 	}
 	if reports[0].PrimaryAction != ActionNoCatalogBundles {
 		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionNoCatalogBundles)
+	}
+	if reports[0].CatalogStatus != "N/A" {
+		t.Errorf("catalog status = %q, want N/A", reports[0].CatalogStatus)
 	}
 }
 
@@ -473,6 +489,94 @@ func TestClassifyInvalidPLCCFullCoverage(t *testing.T) {
 	}
 	if len(reports[0].Gaps) != 0 {
 		t.Errorf("got %d gaps, want 0", len(reports[0].Gaps))
+	}
+}
+
+func TestClassifyPLCCStatusDuplicate(t *testing.T) {
+	// Two products share the same package name. ValidateNoDuplicates
+	// should detect the duplicate and set PLCCStatus = DUPLICATE.
+	catalog := &plcc.Catalog{Data: []plcc.Product{
+		validProduct("op-dup", "1.0"),
+		validProduct("op-dup", "1.1"),
+	}}
+	cd := &CatalogData{
+		LifecycleVersions: map[string]map[string]bool{},
+		BundleVersions: map[string]map[string]bool{
+			"op-dup": {"1.0": true},
+		},
+	}
+	reports := Classify(Input{
+		Catalog:           catalog,
+		CatalogData:       cd,
+		Packages:          []string{"op-dup"},
+		CatalogValidators: []plcc.CatalogValidator{plcc.ValidateNoDuplicates},
+	})
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+	if reports[0].PLCCStatus != PLCCStatusDuplicate {
+		t.Errorf("plcc status = %q, want %q", reports[0].PLCCStatus, PLCCStatusDuplicate)
+	}
+	if reports[0].PrimaryAction != ActionFixPLCC {
+		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionFixPLCC)
+	}
+	if len(reports[0].Gaps) != 1 {
+		t.Fatalf("got %d gaps, want 1", len(reports[0].Gaps))
+	}
+	if reports[0].Gaps[0].Action != ActionFixPLCC {
+		t.Errorf("gap action = %q, want %q", reports[0].Gaps[0].Action, ActionFixPLCC)
+	}
+}
+
+func TestClassifyMissingVersionWithInvalidProduct(t *testing.T) {
+	// A product with one valid version (1.0) and an invalid format. The
+	// bundle includes version 1.1 which is absent from PLCC. The missing
+	// version should be classified as "PLCC missing" (not "Fix PLCC")
+	// even though the product itself fails validation.
+	catalog := &plcc.Catalog{Data: []plcc.Product{
+		{
+			Name:    "Product with bad sibling",
+			Package: "op-mixed",
+			Versions: []plcc.Version{
+				{Name: "bad-version", Phases: []plcc.Phase{}},
+				validProduct("op-mixed", "1.0").Versions[0],
+			},
+			IsOperator: true,
+		},
+	}}
+	cd := &CatalogData{
+		LifecycleVersions: map[string]map[string]bool{},
+		BundleVersions: map[string]map[string]bool{
+			"op-mixed": {"1.0": true, "1.1": true},
+		},
+	}
+	reports := Classify(Input{
+		Catalog:     catalog,
+		CatalogData: cd,
+		Packages:    []string{"op-mixed"},
+		Validators:  plcc.SyntaxValidators(),
+	})
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+	// With the fix, version 1.1 (absent from PLCC) should be "PLCC missing"
+	// and version 1.0 (present but product fails validation) should be "Fix PLCC".
+	if len(reports[0].Gaps) != 2 {
+		t.Fatalf("got %d gaps, want 2", len(reports[0].Gaps))
+	}
+	for _, g := range reports[0].Gaps {
+		switch g.Version {
+		case "1.0":
+			if g.Action != ActionFixPLCC {
+				t.Errorf("gap 1.0 action = %q, want %q", g.Action, ActionFixPLCC)
+			}
+		case "1.1":
+			if g.Action != ActionPLCCMissing {
+				t.Errorf("gap 1.1 action = %q, want %q", g.Action, ActionPLCCMissing)
+			}
+		default:
+			t.Errorf("unexpected gap version %q", g.Version)
+		}
 	}
 }
 
