@@ -26,6 +26,8 @@ bin/plcc2fbc [flags] <output-path>
 | `--validators <list>` | Comma-separated validators to run: labels (e.g. `REQ-DATE-03`) or groups (`all`, `syntax`, `semantic`, `catalog`). Default: `all` |
 | `--list-validators` | List available validators and exit |
 | `--split` | Write each package to `<dir>/<package>/lifecycle.{json,yaml}`; positional arg is a directory |
+| `--report` | Classify catalog lifecycle gaps instead of generating FBC; requires `--catalog-data` |
+| `--catalog-data <file>` | Path to catalog data JSON file (used with `--report`) |
 
 ## Exit Codes
 

@@ -52,6 +52,11 @@ var (
 	majorMinorRegexp = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
 )
 
+// LabelNoDuplicates is the label prefix for the duplicate-package-name
+// catalog validator (REQ-VAL-01). Exported so that consumers can detect
+// duplicate-package rejections without coupling to the raw string.
+const LabelNoDuplicates = "REQ-VAL-01"
+
 // Validator checks a raw PLCC Product for data quality issues.
 // Returns a list of warning/error strings, or nil if the product passes.
 type Validator func(Product) []string
@@ -641,7 +646,7 @@ func ValidateNoDuplicates(products []Product) CatalogRejections {
 	rejections := make(CatalogRejections)
 	for pkg, count := range pkgCount {
 		if count > 1 {
-			rejections[pkg] = []string{fmt.Sprintf("REQ-VAL-01: package %q appears in %d products", pkg, count)}
+			rejections[pkg] = []string{fmt.Sprintf("%s: package %q appears in %d products", LabelNoDuplicates, pkg, count)}
 		}
 	}
 	return rejections

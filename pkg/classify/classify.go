@@ -21,6 +21,7 @@ package classify
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
@@ -28,6 +29,9 @@ import (
 )
 
 // Action is the primary call for an operator or a missing version.
+// The string values are serialized into classification.json and consumed by
+// external tools (plcc-check.sh jq filters, Slack payloads). Treat them as
+// a stable external contract — renaming is a cross-language breaking change.
 type Action string
 
 const (
@@ -62,6 +66,20 @@ func actionPriority(a Action) int {
 	}
 }
 
+// PLCCStatus describes the PLCC data quality state for a package.
+type PLCCStatus string
+
+const (
+	// PLCCStatusOK means PLCC data is present and valid.
+	PLCCStatusOK PLCCStatus = "OK"
+	// PLCCStatusMissing means the product is absent from PLCC data.
+	PLCCStatusMissing PLCCStatus = "MISSING"
+	// PLCCStatusInvalid means PLCC data is present but fails validation.
+	PLCCStatusInvalid PLCCStatus = "INVALID"
+	// PLCCStatusDuplicate means the package name appears in multiple PLCC products.
+	PLCCStatusDuplicate PLCCStatus = "DUPLICATE"
+)
+
 // VersionGap describes a single MAJOR.MINOR version that is missing from
 // the catalog lifecycle entry, along with its classification.
 type VersionGap struct {
@@ -74,7 +92,7 @@ type VersionGap struct {
 type OperatorReport struct {
 	Package       string       `json:"package"`
 	PrimaryAction Action       `json:"primaryAction"`
-	PLCCStatus    string       `json:"plccStatus"`
+	PLCCStatus    PLCCStatus   `json:"plccStatus"`
 	CatalogStatus string       `json:"catalogStatus"`
 	Gaps          []VersionGap `json:"gaps,omitempty"`
 }
@@ -110,6 +128,9 @@ type Input struct {
 // for the run (typically via --validators).
 func Classify(input Input) []OperatorReport {
 	if input.CatalogData == nil {
+		return nil
+	}
+	if input.Catalog == nil {
 		return nil
 	}
 
@@ -205,9 +226,9 @@ func classifyPackage(
 
 	// No bundles shipped: the primary action depends on PLCC status.
 	if len(bundleVersions) == 0 {
-		if r.PLCCStatus == "OK" {
+		if r.PLCCStatus == PLCCStatusOK {
 			r.PrimaryAction = ActionNoCatalogBundles
-		} else if r.PLCCStatus == "MISSING" {
+		} else if r.PLCCStatus == PLCCStatusMissing {
 			r.PrimaryAction = ActionPLCCMissing
 		} else {
 			// PLCC data has issues — Fix PLCC takes priority.
@@ -233,32 +254,32 @@ func classifyPackage(
 	return r
 }
 
-// computePLCCStatus returns the PLCC status string for the package.
+// computePLCCStatus returns the PLCC status for the package.
 func computePLCCStatus(
 	pkg string,
 	product *plcc.Product,
 	catalogRejections plcc.CatalogRejections,
 	validators []plcc.Validator,
-) string {
+) PLCCStatus {
 	if product == nil {
-		return "MISSING"
+		return PLCCStatusMissing
 	}
 	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
 		// Check if it's a duplicate.
 		for _, r := range reasons {
-			if strings.HasPrefix(r, "REQ-VAL-01") {
-				return "DUPLICATE"
+			if strings.HasPrefix(r, plcc.LabelNoDuplicates) {
+				return PLCCStatusDuplicate
 			}
 		}
-		return "INVALID"
+		return PLCCStatusInvalid
 	}
 	if len(validators) > 0 {
 		reasons := plcc.ValidateProduct(*product, validators...)
 		if len(reasons) > 0 {
-			return "INVALID"
+			return PLCCStatusInvalid
 		}
 	}
-	return "OK"
+	return PLCCStatusOK
 }
 
 // computeCatalogStatus returns the catalog coverage string.
@@ -286,23 +307,7 @@ func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) str
 }
 
 func formatCoverage(covered, total int) string {
-	return strings.Join([]string{itoa(covered), "/", itoa(total)}, "")
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	digits := make([]byte, 0, 10)
-	for n > 0 {
-		digits = append(digits, byte('0'+n%10))
-		n /= 10
-	}
-	// reverse
-	for i, j := 0, len(digits)-1; i < j; i, j = i+1, j-1 {
-		digits[i], digits[j] = digits[j], digits[i]
-	}
-	return string(digits)
+	return strconv.Itoa(covered) + "/" + strconv.Itoa(total)
 }
 
 // findMissingVersions returns bundle versions not covered by lifecycle, sorted.
@@ -334,20 +339,15 @@ func parseVersionParts(s string) (int, int) {
 	if len(parts) != 2 {
 		return 0, 0
 	}
-	maj := parseSimpleInt(parts[0])
-	min := parseSimpleInt(parts[1])
-	return maj, min
-}
-
-func parseSimpleInt(s string) int {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return n
-		}
-		n = n*10 + int(c-'0')
+	maj, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0
 	}
-	return n
+	min, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return maj, 0
+	}
+	return maj, min
 }
 
 // classifyVersionGaps classifies each missing version.

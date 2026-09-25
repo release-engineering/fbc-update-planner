@@ -397,6 +397,8 @@ func TestClassifyPriorityOrdering(t *testing.T) {
 		wantBest Action
 	}{
 		{"fix wins over missing", []Action{ActionFixPLCC, ActionPLCCMissing}, ActionFixPLCC},
+		{"missing wins over no bundles", []Action{ActionPLCCMissing, ActionNoCatalogBundles}, ActionPLCCMissing},
+		{"no bundles wins over rebuild", []Action{ActionNoCatalogBundles, ActionNeedsRebuild}, ActionNoCatalogBundles},
 		{"missing wins over rebuild", []Action{ActionPLCCMissing, ActionNeedsRebuild}, ActionPLCCMissing},
 		{"rebuild wins over ok", []Action{ActionNeedsRebuild, ActionOK}, ActionNeedsRebuild},
 		{"fix wins over rebuild", []Action{ActionFixPLCC, ActionNeedsRebuild}, ActionFixPLCC},
@@ -423,6 +425,20 @@ func TestClassifyNilCatalogData(t *testing.T) {
 	})
 	if reports != nil {
 		t.Errorf("expected nil reports with nil CatalogData, got %d", len(reports))
+	}
+}
+
+func TestClassifyNilCatalog(t *testing.T) {
+	cd := &CatalogData{
+		LifecycleVersions: map[string]map[string]bool{},
+		BundleVersions:    map[string]map[string]bool{"op-a": {"1.0": true}},
+	}
+	reports := Classify(Input{
+		Catalog:     nil,
+		CatalogData: cd,
+	})
+	if reports != nil {
+		t.Errorf("expected nil reports with nil Catalog, got %d", len(reports))
 	}
 }
 

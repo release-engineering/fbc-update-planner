@@ -153,10 +153,27 @@ func run() (err error) {
 		if loadErr != nil {
 			return loadErr
 		}
+
+		// Resolve validators before dropping products without package
+		// names — init functions (e.g. initPlatformAlignedPhases) need
+		// the full catalog to look up cross-product context like OCP
+		// lifecycle data.
+		var validatorNames []string
+		for _, name := range strings.Split(validatorsFlag, ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				validatorNames = append(validatorNames, name)
+			}
+		}
+		validators, catalogValidators, valErr := rawCatalog.LookupValidators(validatorNames...)
+		if valErr != nil {
+			return fmt.Errorf("invalid --validators flag: %w", valErr)
+		}
+
 		rawCatalog.DropWithoutPackageName()
 		rawCatalog.ExpandPackages()
 		rawCatalog.SortByPackage()
-		return runReport(rawCatalog, catalogDataPath, validatorsFlag, packages, writePath)
+		return runReport(rawCatalog, catalogDataPath, packages, writePath, validators, catalogValidators)
 	}
 
 	var writer fbc.PackageWriter
@@ -420,23 +437,10 @@ func loadCatalogData(path string) (*classify.CatalogData, error) {
 	return cd, nil
 }
 
-func runReport(catalog *plcc.Catalog, catalogDataPath, validatorsFlag, packages, writePath string) error {
-	cd, err := loadCatalogData(catalogDataPath)
-	if err != nil {
-		return err
-	}
-
-	// Resolve validators from the flag value, matching the run's policy.
-	var validatorNames []string
-	for _, name := range strings.Split(validatorsFlag, ",") {
-		name = strings.TrimSpace(name)
-		if name != "" {
-			validatorNames = append(validatorNames, name)
-		}
-	}
-	validators, catalogValidators, err := catalog.LookupValidators(validatorNames...)
-	if err != nil {
-		return fmt.Errorf("invalid --validators flag: %w", err)
+func runReport(catalog *plcc.Catalog, catalogDataPath, packages, writePath string, validators []plcc.Validator, catalogValidators []plcc.CatalogValidator) (err error) {
+	cd, loadErr := loadCatalogData(catalogDataPath)
+	if loadErr != nil {
+		return loadErr
 	}
 
 	var pkgList []string

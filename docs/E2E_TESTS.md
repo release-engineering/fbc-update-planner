@@ -63,7 +63,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | `plcc-check/operators-validation.jsonl` | ~400 B | Expected `validation.jsonl` for `TestPlccCheckOperatorsFile`. |
 | `catalog-fbc/` | ~150 B | Local FBC directory fixture for `TestPlccCheckCatalogPresence`: contains lifecycle data for `aws-efs-csi-driver-operator` only (no bundles), so `opm render` against it exercises a catalog-hit (OK, zero bundles) and catalog-misses. |
 | `catalog-fbc-versions/` | ~2 KB | Local FBC directory fixture for `TestPlccCheckCatalogVersionCoverage`: contains lifecycle + `olm.bundle` entries for five operators covering full coverage (OK), partial coverage (X/Y), no lifecycle (MISSING), no bundles (OK), and PLCC OK + catalog partial (exercises the done-marker guard). |
-| `plcc-check/catalog-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckCatalogPresence`. Both `$OUTDIR` and the `--catalog-image` path are normalized before comparison. |
+| `plcc-check/catalog-summary.txt` | ~1 KB | Expected `summary.txt` for `TestPlccCheckCatalogPresence`. Includes PLCC/CATALOG table with OK/MISSING statuses and the Action classification section. Both `$OUTDIR` and the `--catalog-image` path are normalized before comparison. |
 
 ---
 

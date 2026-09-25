@@ -33,6 +33,8 @@ pkg/fbc/writer.go             PackageWriter interface + JSON/YAML serializers
 pkg/fbc/writer_test.go        Tests for writers
 pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference output
 pkg/fbc/testdata/             Test fixtures (plcc.json, reference-fbc.yaml, etc.)
+pkg/classify/classify.go      Catalog gap classification — PLCC vs OCP catalog comparison
+pkg/classify/classify_test.go Tests for classify package
 pkg/report/result.go          Shared ValidationResult type + JSON-lines log writer
 test/e2e/e2e_test.go          End-to-end tests — build binary, run against fixture, compare output
 test/e2e/plcc_check_test.go   End-to-end tests for scripts/plcc-check.sh against fixture, compare output
@@ -45,7 +47,7 @@ schema-examples/              Example PLCC + FBC schemas for reference
 scripts/plcc-check.sh         Batch runner — runs plcc2fbc against an operator list (or the full PLCC dataset if
                                none given), optionally checks catalog presence and per-version bundle coverage via
                                --catalog-image/opm (reports OK/X/Y/MISSING), and writes summary.txt, validation.jsonl,
-                               slog.json, and the FBC/PLCC dump to an output directory
+                               slog.json, classification.json, and the FBC/PLCC dump to an output directory
 scripts/top-operators         Example operator list for plcc-check.sh
 .goreleaser.yaml              GoReleaser config for cross-platform binary builds
 .github/workflows/tests.yaml  CI workflow — runs tests + lint on PRs to main
@@ -83,6 +85,8 @@ plcc2fbc [flags] <output-path>
     --validators    Comma-separated validators to run: labels, or groups all/none/syntax/semantic/catalog (default: all)
     --list-validators  List available validators and exit
     --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory
+    --report        Classify catalog lifecycle gaps instead of generating FBC; requires --catalog-data
+    --catalog-data  Path to catalog data JSON file (used with --report)
 ```
 
 ## Architecture
@@ -107,6 +111,15 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
 
 With --dump-plcc:
   → catalog.Dump()                  # write filtered PLCC JSON directly, skip FBC generation
+
+With --report:
+  → catalog.LookupValidators()      # resolve validators before dropping OCP product
+  → rawCatalog.DropWithoutPackageName()
+  → rawCatalog.ExpandPackages()
+  → rawCatalog.SortByPackage()
+  → loadCatalogData()               # load pre-extracted catalog data (lifecycle + bundle versions)
+  → classify.Classify()             # compare PLCC vs catalog, classify each operator/version
+  → json.Encode(reports)            # write classification.json
 ```
 
 ### Three pipeline layers
@@ -130,6 +143,12 @@ With --dump-plcc:
 - `fbc.Filter` — `func(*Package) []string` — output cleanup pipeline callback
 - `fbc.PackageWriter` — interface for serializing packages (JSON, JSON-pretty, YAML)
 - `report.ValidationResult` — structured JSON logged to stderr (or to a file via `-l`) for rejected/warned packages
+- `classify.Action` — primary call for an operator: `OK`, `PLCC missing`, `Fix PLCC`, `Needs rebuild`, `No catalog bundles`
+- `classify.PLCCStatus` — PLCC data quality state: `OK`, `MISSING`, `INVALID`, `DUPLICATE`
+- `classify.VersionGap` — a missing MAJOR.MINOR version with its classification and reasons
+- `classify.OperatorReport` — classification result for one operator package
+- `classify.CatalogData` — pre-extracted catalog lifecycle and bundle version sets
+- `classify.Input` — input struct for `Classify()`: catalog, catalog data, packages, validators
 
 ### FBC Schema
 
