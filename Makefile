@@ -10,7 +10,13 @@ build: plcc2fbc
 
 .PHONY: plcc2fbc
 plcc2fbc:
+	mkdir -p bin
 	go build $(GOFLAGS) -ldflags='$(LDFLAGS)' -o bin/plcc2fbc ./cmd/plcc2fbc
+
+.PHONY: plcc-check
+plcc-check:
+	mkdir -p bin
+	go build $(GOFLAGS) -o bin/plcc-check ./cmd/plcc-check
 
 .PHONY: test
 test:

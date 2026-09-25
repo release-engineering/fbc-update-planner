@@ -24,10 +24,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	flag "github.com/spf13/pflag"
 
+	"github.com/release-engineering/fbc-update-planner/pkg/assessment"
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
@@ -60,7 +60,7 @@ func runConvertCommand(args []string) (err error) {
 	flags.BoolVar(&split, "split", false, "write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory")
 	flags.BoolVar(&showVersion, "version", false, "print version and exit")
 	flags.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n       %s report [flags] <catalog-data.json> <output.json>\n       %s fetch [flags] <snapshot.json>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\n\nFlags:\n", os.Args[0], os.Args[0], os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <output-path>\n\nThe parent directory of <output-path> must already exist.\nWith --split, <output-path> must be an existing directory; partial output is not cleaned up on failure.\n\nFlags:\n", os.Args[0])
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -234,83 +234,42 @@ func writePackageToDir(dir, pkgName string, writer fbc.PackageWriter, pkg *fbc.P
 }
 
 func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMissing bool, reportWriter io.Writer) (*plcc.Catalog, error) {
-	catalog, err := loadCatalog(inputPath)
+	raw, err := loadCatalog(inputPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading PLCC data: %w", err)
 	}
 	// Validators can have init functions that require an already loaded catalog,
 	// so collect them only after the catalog is loaded.
-	validators, catalogValidators, err := catalog.LookupValidators(parseValidatorNames(validatorsFlag)...)
+	validators, catalogValidators, err := raw.LookupValidators(parseValidatorNames(validatorsFlag)...)
 	if err != nil {
 		return nil, fmt.Errorf("invalid --validators flag: %w", err)
 	}
 	slog.Info("resolved validators", "product", len(validators), "catalog", len(catalogValidators))
 
-	slog.Info("fetched products from PLCC", "count", catalog.Len())
-	if packages != "" {
-		var names []string
-		for _, name := range strings.Split(packages, ",") {
-			name = strings.TrimSpace(name)
-			if name != "" {
-				names = append(names, name)
-			}
-		}
-		if err := catalog.FilterByPackageNames(names); err != nil {
-			if !allowMissing {
-				return nil, err
-			}
-			var pkgErr *plcc.PackagesNotFoundError
-			if !errors.As(err, &pkgErr) {
-				return nil, err
-			}
-			for _, name := range pkgErr.Names {
-				slog.Warn("requested package not found in PLCC data", "package", name)
-			}
-		}
-	} else {
-		catalog.DropWithoutPackageName()
+	slog.Info("fetched products from PLCC", "count", raw.Len())
+	result, err := assessment.Validate(raw, assessment.ValidationOptions{
+		Packages:          parseValidatorNames(packages),
+		SelectPackages:    packages != "",
+		Validators:        validators,
+		CatalogValidators: catalogValidators,
+		Strict:            strict,
+		AllowMissing:      allowMissing,
+	})
+	if err != nil {
+		return nil, err
 	}
-	slog.Info("filtered products", "count", catalog.Len())
-	catalog.SortByPackage()
-
-	if len(catalogValidators) > 0 {
-		before := catalog.Len()
-		for pkg, reasons := range catalog.Validate(strict, catalogValidators...) {
-			if err := report.LogResults(reportWriter, report.ValidationResult{
-				PackageName: pkg,
-				Valid:       !strict,
-				Reasons:     reasons,
-			}); err != nil {
-				return nil, fmt.Errorf("writing validation report for %s: %w", pkg, err)
-			}
-		}
-		if strict {
-			slog.Info("PLCC catalog validation", "passed", catalog.Len(), "filtered", before-catalog.Len())
-		}
+	for _, name := range result.MissingPackages {
+		slog.Warn("requested package not found in PLCC data", "package", name)
 	}
-
-	var filtered []plcc.Product
-	for _, product := range catalog.Data {
-		warnings := plcc.ValidateProduct(product, validators...)
-		if len(warnings) == 0 {
-			filtered = append(filtered, product)
-			continue
-		}
-		if err := report.LogResults(reportWriter, report.ValidationResult{
-			PackageName: product.Package,
-			Valid:       !strict,
-			Reasons:     warnings,
-		}); err != nil {
-			return nil, fmt.Errorf("writing validation report for %s: %w", product.Package, err)
-		}
-		if !strict {
-			filtered = append(filtered, product)
-		}
+	slog.Info("filtered products", "count", result.SelectedCount)
+	if err := report.LogResults(reportWriter, result.Validation...); err != nil {
+		return nil, err
+	}
+	if len(catalogValidators) > 0 && strict {
+		slog.Info("PLCC catalog validation", "passed", result.SelectedCount-result.CatalogFiltered, "filtered", result.CatalogFiltered)
 	}
 	if strict {
-		slog.Info("PLCC product validation", "passed", len(filtered), "filtered", len(catalog.Data)-len(filtered))
-		catalog.Data = filtered
+		slog.Info("PLCC product validation", "passed", result.Catalog.Len(), "filtered", result.ProductFiltered)
 	}
-
-	return catalog, nil
+	return result.Catalog, nil
 }

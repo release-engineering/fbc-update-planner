@@ -14,10 +14,9 @@
 ## Layout
 
 ```
-cmd/plcc2fbc/main.go          CLI entry point — command dispatch, shared helpers, exit codes
-cmd/plcc2fbc/convert_command.go  Legacy conversion CLI and pipeline orchestration
-cmd/plcc2fbc/report_command.go   Catalog gap report command and catalog-data loading
-cmd/plcc2fbc/fetch_command.go    Raw PLCC snapshot command
+cmd/plcc2fbc/main.go          Conversion CLI entry point, shared helpers, exit codes
+cmd/plcc2fbc/convert_command.go  Conversion flags and output orchestration
+cmd/plcc-check/main.go        Daily checker CLI
 cmd/plcc2fbc/version.go       Version/commit variables injected via ldflags
 cmd/plcc2fbc/main_test.go     Tests for CLI (run function)
 pkg/plcc/plcc.go              PLCC API client, data types, filtering, sorting
@@ -38,6 +37,10 @@ pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference ou
 pkg/fbc/testdata/             Test fixtures (plcc.json, reference-fbc.yaml, etc.)
 pkg/classify/classify.go      Catalog gap classification — PLCC vs OCP catalog comparison
 pkg/classify/classify_test.go Tests for classify package
+pkg/catalog/render.go         Parse the JSON object stream from opm render
+pkg/assessment/validation.go  Shared PLCC selection and validation pipeline
+pkg/assessment/assessment.go  Per-package PLCC/FBC outcomes from one pipeline run
+pkg/check/                    Daily assessment, summary and Slack rendering
 pkg/report/result.go          Shared ValidationResult type + JSON-lines log writer
 test/e2e/e2e_test.go          End-to-end tests — build binary, run against fixture, compare output
 test/e2e/plcc_check_test.go   End-to-end tests for scripts/plcc-check.sh against fixture, compare output
@@ -47,10 +50,7 @@ docs/FBC_SCHEMA.md            FBC output schema reference
 docs/E2E_TESTS.md             E2e test architecture, test matrix, golden file workflow
 docs/RELEASING.md             Release process and version injection reference
 schema-examples/              Example PLCC + FBC schemas for reference
-scripts/plcc-check.sh         Batch runner — runs plcc2fbc against an operator list (or the full PLCC dataset if
-                               none given), optionally checks catalog presence and per-version bundle coverage via
-                               --catalog-image/opm (reports OK/X/Y/MISSING), and writes summary.txt, validation.jsonl,
-                               slog.json, classification.json, and the FBC/PLCC dump to an output directory
+scripts/plcc-check.sh         Compatibility wrapper — builds and execs bin/plcc-check
 scripts/top-operators         Example operator list for plcc-check.sh
 .goreleaser.yaml              GoReleaser config for cross-platform binary builds
 .github/workflows/tests.yaml  CI workflow — runs tests + lint on PRs to main
@@ -61,8 +61,9 @@ scripts/top-operators         Example operator list for plcc-check.sh
 
 ```sh
 make build              # → bin/plcc2fbc
+make plcc-check        # → bin/plcc-check (used by the script and daily workflows)
 make test               # go test -v -count 1 ./...
-make e2e                # go test -v -count 1 ./test/e2e/
+make e2e                # go test -v -count 1 -tags=e2e ./test/e2e/
 make update-e2e         # regenerate e2e reference files from existing testdata/plcc.json
 make update-e2e-source  # fetch fresh plcc.json from PLCC API + regenerate references
 make update-e2e-plcc-check  # regenerate plcc-check.sh e2e golden files from existing testdata/plcc.json
@@ -75,12 +76,10 @@ No separate lint command — CI runs `golangci-lint` with defaults (no `.golangc
 
 ### CLI Flags
 
-The flags below apply to the default conversion invocation; `report` and `fetch` have separate flag sets.
+`plcc2fbc` handles conversion. `plcc-check.sh` (or `bin/plcc-check`) handles assessment and reporting.
 
 ```
 plcc2fbc [flags] <output-path>
-plcc2fbc fetch [-i <plcc.json>] <snapshot.json>
-plcc2fbc report [-i <plcc.json>] [-p <names>] [--validators <list>] <catalog-data.json> <output.json>
 
 -o, --output        Output format: json, json-pretty, or yaml (default: json)
 -l, --log           Write validation/filtering report to a file (default: stderr)
@@ -94,17 +93,15 @@ plcc2fbc report [-i <plcc.json>] [-p <names>] [--validators <list>] <catalog-dat
     --split         Write each package to <dir>/<package>/lifecycle.{json,yaml}; positional arg is a directory
 ```
 
+The checker accepts `-i`, `-o`, `--plcc`, `--validators`, `--catalog-image`, `--webhook`, and an optional operators file. It uses the same PLCC data in memory for conversion and classification.
+
 ## Architecture
 
 ### Data Flow
 
 ```
 PLCC API (or -i file) → plcc.Fetch()/Load()
-  → catalog.FilterByPackageNames()    # if -p flag set; returns PackagesNotFoundError on missing packages (--allow-missing downgrades to warning)
-  → catalog.DropWithoutPackageName()  # otherwise: drop products without package names
-  → catalog.SortByPackage()           # alphabetical
-  → catalog.Validate()                # catalog-level PLCC validators (cross-product checks)
-  → plcc.ValidateProduct()            # per-product PLCC validators (filter out failures; --permissive keeps them)
+  → assessment.Validate()             # selection, catalog-level and product validators; returns structured rejections
   → catalog.ExpandPackages()          # split comma-separated package names into separate products
   → catalog.SortByPackage()           # re-sort expanded products
   → writeFBC()                        # single-file mode (default):
@@ -117,16 +114,15 @@ PLCC API (or -i file) → plcc.Fetch()/Load()
 With --dump-plcc:
   → catalog.Dump()                  # write filtered PLCC JSON directly, skip FBC generation
 
-With the report command:
-  → catalog.LookupValidators()      # resolve validators before dropping OCP product
-  → rawCatalog.DropWithoutPackageName()
-  → rawCatalog.SortByPackage()
-  → loadCatalogData()               # load pre-extracted lifecycle packages and version sets
-  → classify.Classify()             # compare PLCC vs catalog, classify each operator/version
-  → json.Encode(reports)            # write classification.json
+With plcc-check:
+  → load raw PLCC once; resolve validators on the full raw catalog
+  → assessment.Validate() and assessment.Evaluate()  # shared validation and full-package FBC translation
+  → opm render <catalog-image>       # when requested; parse JSON directly with catalog.ParseRender()
+  → classify.Classify()              # compare those results with coverage; check missing versions individually
+  → render summary.txt, classification.json, and Slack payload from the same reports
 ```
 
-With `plcc-check.sh --catalog-image`, the `fetch` command first saves one raw PLCC snapshot. Conversion and reporting both read it with `-i`.
+The shell wrapper contains no assessment logic. `plcc-check` is built for repository workflows; GoReleaser and the container continue to publish `plcc2fbc` only.
 
 ### Three pipeline layers
 
@@ -153,8 +149,8 @@ With `plcc-check.sh --catalog-image`, the `fetch` command first saves one raw PL
 - `classify.PLCCStatus` — PLCC data quality state: `OK`, `MISSING`, `INVALID`, `DUPLICATE`
 - `classify.VersionGap` — a missing MAJOR.MINOR version with its classification and reasons
 - `classify.OperatorReport` — classification result for one operator package
-- `classify.CatalogData` — pre-extracted catalog lifecycle and bundle version sets
-- `classify.Input` — input struct for `Classify()`: catalog, catalog data, packages, validators
+- `classify.CatalogData` — in-memory catalog lifecycle and bundle version sets parsed from opm output
+- `classify.Input` — input struct for `Classify()`: raw catalog, evaluated results, catalog data, packages
 
 ### FBC Schema
 
@@ -210,5 +206,5 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - All `.go` files must have the Apache 2.0 license header
 - No `.golangci.yaml` — linter uses upstream defaults
 - Design choice: `newPackage()` delegates to `translateVersion()` which iterates `converterRegistry` directly; any converter error (malformed version name, unparseable timestamps, invalid OCP format) rejects the entire package. The FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
-- Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
+- Logging model: `plcc2fbc` writes structured `slog` to stdout and validation results to stderr (or `-l`). `plcc-check` writes `slog.json` and `validation.jsonl` artifacts and prints `summary.txt` to stdout. Both CLIs print fatal errors to stderr.
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used

@@ -6,17 +6,17 @@
 
 ```shell
 make build
+make plcc-check
 ```
 
 ## Run
 
 ```shell
 bin/plcc2fbc [flags] <output-path>
-bin/plcc2fbc fetch [-i <plcc.json>] <snapshot.json>
-bin/plcc2fbc report [-i <plcc.json>] [-p <names>] [--validators <list>] <catalog-data.json> <output.json>
+scripts/plcc-check.sh [-i <plcc.json>] [--catalog-image <image>] [-o <dir>] [operators-file]
 ```
 
-The flags below apply to the default conversion invocation. `report` and `fetch` accept only the options shown above; each command has its own `--help` output.
+The flags below apply to `plcc2fbc`, which handles PLCC-to-FBC conversion only.
 
 | Flag | Description |
 |------|-------------|
@@ -31,9 +31,9 @@ The flags below apply to the default conversion invocation. `report` and `fetch`
 | `--list-validators` | List available validators and exit |
 | `--split` | Write each package to `<dir>/<package>/lifecycle.{json,yaml}`; positional arg is a directory |
 
-`fetch` writes raw PLCC data without filtering; `-i` reads an existing file instead of calling the API. `report` compares that PLCC snapshot with extracted catalog data and writes classification JSON. `plcc-check.sh` uses one fetched snapshot for conversion and reporting.
+`plcc-check.sh` builds and runs the separate Go checker. It loads PLCC data once, reads the JSON stream from `opm render` when `--catalog-image` is set, and writes `summary.txt`, `validation.jsonl`, `slog.json`, FBC output or a PLCC dump, and optional `classification.json` and `slack-payload.json`. Use `scripts/plcc-check.sh --help` for its options. The checker is built for repository workflows; released binaries and the container continue to contain `plcc2fbc` only.
 
-## Exit Codes
+## `plcc2fbc` exit codes
 
 | Code | Meaning |
 |------|---------|

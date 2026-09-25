@@ -24,14 +24,15 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/release-engineering/fbc-update-planner/pkg/assessment"
+	"github.com/release-engineering/fbc-update-planner/pkg/catalog"
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
 
 // Action is the primary call for an operator or a missing version.
-// The string values are serialized into classification.json and consumed by
-// external tools (plcc-check.sh jq filters, Slack payloads). Treat them as
-// a stable external contract — renaming is a cross-language breaking change.
+// The string values are serialized into classification.json and shown in
+// summary and Slack reports. Treat them as a stable external contract.
 type Action string
 
 const (
@@ -111,24 +112,16 @@ type OperatorReport struct {
 	Gaps          []VersionGap  `json:"gaps,omitempty"`
 }
 
-// CatalogData holds pre-extracted catalog information: which packages
-// have lifecycle entries and bundles, and what versions each contains.
-type CatalogData struct {
-	// LifecyclePackages records packages with a lifecycle entry, including
-	// entries with no versions.
-	LifecyclePackages map[string]bool
-	// LifecycleVersions maps package name → set of MAJOR.MINOR version strings
-	// present in lifecycle entries.
-	LifecycleVersions map[string]map[string]bool
-	// BundleVersions maps package name → set of MAJOR.MINOR version strings
-	// present in shipped bundles.
-	BundleVersions map[string]map[string]bool
-}
+// CatalogData names the normalized catalog view consumed by classification.
+type CatalogData = catalog.Data
 
 // Input holds everything needed to classify a set of operators.
 type Input struct {
 	// Catalog is the loaded PLCC catalog (before filtering/validation).
 	Catalog *plcc.Catalog
+	// Evaluated is the result of the shared validation and translation
+	// pipeline. If omitted, Classify evaluates Catalog itself.
+	Evaluated *assessment.Result
 	// CatalogData holds lifecycle and bundle version sets from the OCP catalog.
 	CatalogData *CatalogData
 	// Packages to assess. If empty, all packages with PLCC data, lifecycle
@@ -154,30 +147,29 @@ func Classify(input Input) []OperatorReport {
 		return nil
 	}
 
-	// Build a lookup from package name to raw PLCC product.
-	plccByPackage := buildPLCCIndex(input.Catalog)
-
-	// Determine the catalog-level rejections.
-	catalogRejections := make(plcc.CatalogRejections)
-	if len(input.CatalogValidators) > 0 {
-		// Run catalog validators on all products (not just the requested set)
-		// to catch cross-product issues like duplicate package names.
-		for _, v := range input.CatalogValidators {
-			for pkg, reasons := range v(input.Catalog.Data) {
-				catalogRejections[pkg] = append(catalogRejections[pkg], reasons...)
-			}
+	evaluated := input.Evaluated
+	if evaluated == nil {
+		validated, err := assessment.Validate(input.Catalog, assessment.ValidationOptions{
+			Validators:        input.Validators,
+			CatalogValidators: input.CatalogValidators,
+			Strict:            true,
+		})
+		if err != nil { // No selection or I/O occurs in this path.
+			return nil
 		}
+		result := assessment.Evaluate(input.Catalog, validated, true)
+		evaluated = &result
 	}
 
 	// Determine the set of packages to assess.
 	packages := input.Packages
 	if len(packages) == 0 {
-		packages = allPackages(plccByPackage, input.CatalogData)
+		packages = allPackages(evaluated.Packages, input.CatalogData)
 	}
 
 	reports := make([]OperatorReport, 0, len(packages))
 	for _, pkg := range packages {
-		r := classifyPackage(pkg, plccByPackage, input.CatalogData, catalogRejections, input.Validators)
+		r := classifyPackage(pkg, evaluated.Packages[pkg], input.CatalogData)
 		reports = append(reports, r)
 	}
 
@@ -187,25 +179,9 @@ func Classify(input Input) []OperatorReport {
 	return reports
 }
 
-// buildPLCCIndex expands comma-separated package names and builds a map
-// from each individual package name to its PLCC product (with version data).
-func buildPLCCIndex(catalog *plcc.Catalog) map[string]*plcc.Product {
-	index := make(map[string]*plcc.Product)
-	for i := range catalog.Data {
-		p := &catalog.Data[i]
-		for _, pkg := range p.Packages() {
-			// First match wins (duplicates are handled by catalog validators).
-			if _, exists := index[pkg]; !exists {
-				index[pkg] = p
-			}
-		}
-	}
-	return index
-}
-
 // allPackages returns the union of packages with PLCC data, lifecycle
 // entries, and catalog bundles, sorted alphabetically.
-func allPackages(plccIndex map[string]*plcc.Product, cd *CatalogData) []string {
+func allPackages(plccIndex map[string]*assessment.Package, cd *CatalogData) []string {
 	seen := make(map[string]bool)
 	for pkg := range plccIndex {
 		seen[pkg] = true
@@ -230,43 +206,26 @@ func allPackages(plccIndex map[string]*plcc.Product, cd *CatalogData) []string {
 // classifyPackage determines the status and gaps for a single package.
 func classifyPackage(
 	pkg string,
-	plccIndex map[string]*plcc.Product,
+	state *assessment.Package,
 	cd *CatalogData,
-	catalogRejections plcc.CatalogRejections,
-	validators []plcc.Validator,
 ) OperatorReport {
 	r := OperatorReport{Package: pkg}
 
-	product := plccIndex[pkg]
+	var product *plcc.Product
+	var catalogReasons, productReasons []string
+	if state != nil {
+		product = state.Product
+		catalogReasons = state.CatalogReasons
+		productReasons = state.ProductReasons
+		r.Reasons = append(r.Reasons, catalogReasons...)
+		r.Reasons = append(r.Reasons, productReasons...)
+		r.Reasons = append(r.Reasons, state.TranslationReasons...)
+	}
 	bundleVersions := cd.BundleVersions[pkg]
 	lifecycleVersions := cd.LifecycleVersions[pkg]
 
-	// Compute per-product validation once. Both PLCC status and gap
-	// classification consume this result, avoiding redundant calls to
-	// plcc.ValidateProduct.
-	var productReasons []string
-	if product != nil && len(validators) > 0 {
-		if _, ok := catalogRejections[pkg]; !ok {
-			productReasons = plcc.ValidateProduct(*product, validators...)
-		}
-	}
-	var translationReasons []string
-	if product != nil && len(catalogRejections[pkg]) == 0 && len(productReasons) == 0 {
-		// Translation rejects a whole package when any version fails. Keep
-		// that result for the primary call, then classify gaps individually.
-		perPackage := *product
-		perPackage.Package = pkg
-		_, failure := fbc.TranslateProduct(perPackage, fbc.DefaultFilters()...)
-		if failure != nil {
-			translationReasons = failure.Reasons
-		}
-	}
-	r.Reasons = append(r.Reasons, catalogRejections[pkg]...)
-	r.Reasons = append(r.Reasons, productReasons...)
-	r.Reasons = append(r.Reasons, translationReasons...)
-
 	// Compute PLCC status using the validation and translation results.
-	r.PLCC = computePLCCStatus(pkg, product, catalogRejections, r.Reasons)
+	r.PLCC = computePLCCStatus(product, catalogReasons, r.Reasons)
 
 	// Compute catalog status.
 	r.CatalogStatus = computeCatalogStatus(cd.LifecyclePackages[pkg] || len(lifecycleVersions) > 0, lifecycleVersions, bundleVersions)
@@ -300,7 +259,7 @@ func classifyPackage(
 	}
 
 	// Classify each missing version using cached validation results.
-	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogRejections[pkg], productReasons)
+	r.Gaps = classifyVersionGaps(pkg, missingVersions, product, catalogReasons, productReasons)
 
 	// Determine primary action: highest priority among all gaps.
 	r.PrimaryAction = primaryAction(r)
@@ -314,17 +273,16 @@ func classifyPackage(
 // computePLCCStatus returns the PLCC status for the package.
 // reasons contains the package's validation and translation failures.
 func computePLCCStatus(
-	pkg string,
 	product *plcc.Product,
-	catalogRejections plcc.CatalogRejections,
+	catalogReasons []string,
 	reasons []string,
 ) PLCCStatus {
 	if product == nil {
 		return PLCCStatusMissing
 	}
-	if reasons, ok := catalogRejections[pkg]; ok && len(reasons) > 0 {
+	if len(catalogReasons) > 0 {
 		// Check if it's a duplicate.
-		for _, r := range reasons {
+		for _, r := range catalogReasons {
 			if strings.HasPrefix(r, plcc.LabelNoDuplicates) {
 				return PLCCStatusDuplicate
 			}

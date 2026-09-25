@@ -92,8 +92,8 @@ func TestClassifyFullCoverage(t *testing.T) {
 }
 
 func TestClassifyPreTruncatedBundleVersions(t *testing.T) {
-	// The classify package receives bundle versions already truncated to
-	// MAJOR.MINOR by the catalog extraction layer (shell script's jq + sed).
+	// The classify package receives bundle versions already normalized to
+	// MAJOR.MINOR by the opm render parser.
 	// This test verifies that pre-truncated versions match correctly.
 	catalog := &plcc.Catalog{Data: []plcc.Product{validProduct("op-a", "1.0")}}
 	cd := &CatalogData{

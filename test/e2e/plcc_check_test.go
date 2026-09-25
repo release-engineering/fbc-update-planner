@@ -176,15 +176,15 @@ func TestPlccCheckOperatorsFile(t *testing.T) {
 		gotMsgs = append(gotMsgs, slogField(t, line, "msg").(string))
 	}
 	wantMsgs := []string{
-		"plcc2fbc starting",
+		"plcc-check starting",
+		"loaded PLCC products",
 		"resolved validators",
-		"fetched products from PLCC",
 		"requested package not found in PLCC data",
-		"filtered products",
+		"selected products",
 		"PLCC catalog validation",
 		"PLCC product validation",
-		"PLCC product expansion",
-		"wrote FBC data",
+		"FBC translation",
+		"assessment complete",
 	}
 	if strings.Join(gotMsgs, ",") != strings.Join(wantMsgs, ",") {
 		t.Errorf("unexpected slog message sequence:\ngot:  %v\nwant: %v", gotMsgs, wantMsgs)
@@ -193,14 +193,12 @@ func TestPlccCheckOperatorsFile(t *testing.T) {
 	for i, line := range lines {
 		var want map[string]any
 		switch gotMsgs[i] {
-		case "filtered products":
+		case "selected products":
 			want = map[string]any{"count": float64(4)}
 		case "PLCC product validation":
 			want = map[string]any{"passed": float64(1), "filtered": float64(1)}
-		case "PLCC product expansion":
-			want = map[string]any{"count": float64(1)}
-		case "wrote FBC data":
-			want = map[string]any{"count": float64(1)}
+		case "FBC translation":
+			want = map[string]any{"passed": float64(1), "filtered": float64(0)}
 		default:
 			continue
 		}
@@ -334,15 +332,8 @@ func TestPlccCheckCatalogVersionCoverage(t *testing.T) {
 	}
 }
 
-// TestPlccCheckCatalogEmptyPackageName is a regression test for a bash
-// pitfall in fetch_catalog_packages: its final statement used to be a bare
-// "[[ -n "$name" ]] && arr+=(...)" with nothing after it. Under "set -e",
-// if that guard evaluates false on the last line read, the function's exit
-// status becomes non-zero and the whole script dies silently. That trigger
-// requires an empty catalog package name to sort last, which happens when a
-// catalog schema entry has an empty (but present) "package" field and it's
-// the only entry opm renders; testdata/catalog-fbc-empty-package reproduces
-// that. This only checks the script survives, not its output content.
+// TestPlccCheckCatalogEmptyPackageName verifies that an empty package field
+// in the only rendered lifecycle entry does not abort the assessment.
 func TestPlccCheckCatalogEmptyPackageName(t *testing.T) {
 	outDir := t.TempDir()
 	_, stderr, exitCode := runPlccCheck(t,
@@ -580,6 +571,10 @@ func TestPlccCheckWebhookRejectsUnknownSection(t *testing.T) {
 	if !strings.Contains(string(stderr), "unsupported webhook section: details") {
 		t.Errorf("stderr = %q, want unsupported-section error", stderr)
 	}
+	_, stderr, exitCode = runPlccCheck(t, "--webhook", "")
+	if exitCode != 1 || !strings.Contains(string(stderr), "requires a comma-separated list") {
+		t.Errorf("empty --webhook: exit code %d, stderr %q", exitCode, stderr)
+	}
 }
 
 func TestPlccCheckMissingFBCOutput(t *testing.T) {
@@ -607,6 +602,49 @@ func TestPlccCheckMissingFBCOutput(t *testing.T) {
 	}
 	if !bytes.Equal(stdout, summary) {
 		t.Errorf("stdout and summary.txt differ:\nstdout:\n%s\nsummary.txt:\n%s", stdout, summary)
+	}
+}
+
+func TestPlccCheckPLCCOnlySkipsTranslation(t *testing.T) {
+	outDir := t.TempDir()
+	stdout, stderr, exitCode := runPlccCheck(t,
+		"-i", "testdata/untranslatable.json",
+		"--validators", "none",
+		"--plcc",
+		"-o", outDir,
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code %d; stderr:\n%s", exitCode, stderr)
+	}
+	if !strings.Contains(string(stdout), "PLCC OK:           1 / 1") {
+		t.Errorf("PLCC-only run applied conversion checks:\n%s", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "plcc-dump.json")); err != nil {
+		t.Errorf("PLCC dump missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "fbc-output.yaml")); !os.IsNotExist(err) {
+		t.Errorf("unexpected FBC output: %v", err)
+	}
+}
+
+func TestPlccCheckOpmFailureIsFatal(t *testing.T) {
+	fakeBin := t.TempDir()
+	fakeOpm := filepath.Join(fakeBin, "opm")
+	if err := os.WriteFile(fakeOpm, []byte("#!/bin/sh\necho broken-catalog >&2\nexit 7\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outDir := t.TempDir()
+	_, stderr, exitCode := runPlccCheckWithEnv(t,
+		[]string{"PATH=" + fakeBin + string(os.PathListSeparator) + os.Getenv("PATH")},
+		"-i", "testdata/plcc.json",
+		"-o", outDir,
+		"--catalog-image", "broken-image",
+	)
+	if exitCode != 1 || !strings.Contains(string(stderr), "opm render failed") || !strings.Contains(string(stderr), "broken-catalog") {
+		t.Errorf("exit code %d, stderr %q; want a fatal opm error", exitCode, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "classification.json")); !os.IsNotExist(err) {
+		t.Errorf("classification should not exist after opm failure: %v", err)
 	}
 }
 

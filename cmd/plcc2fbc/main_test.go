@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -140,58 +139,9 @@ func TestRun(t *testing.T) {
 			wantErr: "failed FBC translation",
 		},
 		{
-			name:    "report needs two paths",
-			args:    []string{"plcc2fbc", "report", "-i", testdataInput, "data.json"},
-			wantErr: "report requires catalog data and output paths",
-		},
-		{
-			name:    "report rejects extra paths",
-			args:    []string{"plcc2fbc", "report", "-i", testdataInput, "data.json", "out.json", "extra.json"},
-			wantErr: "report requires catalog data and output paths",
-		},
-		{
-			name:    "report rejects conversion flags",
-			args:    []string{"plcc2fbc", "report", "--split", "data.json", t.TempDir() + "/out.json"},
-			wantErr: "unknown flag",
-		},
-		{
-			name:    "legacy conversion rejects report flag",
+			name:    "conversion rejects report flag",
 			args:    []string{"plcc2fbc", "--report", t.TempDir() + "/out.json"},
 			wantErr: "unknown flag",
-		},
-		{
-			name:    "fetch needs output path",
-			args:    []string{"plcc2fbc", "fetch", "-i", testdataInput},
-			wantErr: "fetch requires a snapshot output path",
-		},
-		{
-			name:    "fetch rejects extra paths",
-			args:    []string{"plcc2fbc", "fetch", "-i", testdataInput, "snapshot.json", "extra.json"},
-			wantErr: "fetch requires a snapshot output path",
-		},
-		{
-			name:    "fetch reports bad input file",
-			args:    []string{"plcc2fbc", "fetch", "-i", "/nonexistent/plcc.json", t.TempDir() + "/snapshot.json"},
-			wantErr: "reading PLCC file",
-		},
-		{
-			name:    "fetch rejects report flags",
-			args:    []string{"plcc2fbc", "fetch", "--validators", "none", t.TempDir() + "/snapshot.json"},
-			wantErr: "unknown flag",
-		},
-		{
-			name:    "catalog-data non-existent file",
-			args:    []string{"plcc2fbc", "report", "-i", testdataInput, filepath.Join(t.TempDir(), "no-such-file.json"), t.TempDir() + "/out.json"},
-			wantErr: "reading catalog data",
-		},
-		{
-			name: "catalog-data malformed JSON",
-			args: func() []string {
-				badFile := filepath.Join(t.TempDir(), "bad.json")
-				_ = os.WriteFile(badFile, []byte("{not valid json"), 0o644)
-				return []string{"plcc2fbc", "report", "-i", testdataInput, badFile, t.TempDir() + "/out.json"}
-			}(),
-			wantErr: "decoding catalog data",
 		},
 	}
 
@@ -227,15 +177,9 @@ func TestRun(t *testing.T) {
 }
 
 func TestCommandHelp(t *testing.T) {
-	for _, args := range [][]string{
-		{"plcc2fbc", "--help"},
-		{"plcc2fbc", "report", "--help"},
-		{"plcc2fbc", "fetch", "--help"},
-	} {
-		setCLIArgs(args)
-		if err := run(); err != nil {
-			t.Errorf("%v: help returned error: %v", args, err)
-		}
+	setCLIArgs([]string{"plcc2fbc", "--help"})
+	if err := run(); err != nil {
+		t.Errorf("help returned error: %v", err)
 	}
 }
 
@@ -507,49 +451,6 @@ func TestRunSuccess(t *testing.T) {
 				commaDir := filepath.Join(dir, "alpha-op,beta-op")
 				if _, err := os.Stat(commaDir); err == nil {
 					t.Errorf("should not create directory with literal comma-separated name %q", commaDir)
-				}
-			},
-		},
-		{
-			name: "report command produces classification JSON",
-			args: func(out string) []string {
-				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
-				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{"aws-efs-csi-driver-operator":["4.16","4.17"]},"bundleVersions":{"aws-efs-csi-driver-operator":["4.16","4.17"]}}`), 0o644)
-				return []string{"plcc2fbc", "report", "-i", testdataInput, cdFile, out}
-			},
-			checks: func(t *testing.T, outFile string) {
-				data, err := os.ReadFile(outFile)
-				if err != nil {
-					t.Fatalf("reading report output: %v", err)
-				}
-				if !json.Valid(data) {
-					t.Fatal("report output is not valid JSON")
-				}
-				if !strings.Contains(string(data), "aws-efs-csi-driver-operator") {
-					t.Error("report should contain the package name")
-				}
-				if !strings.Contains(string(data), "primaryAction") {
-					t.Error("report should contain primaryAction field")
-				}
-			},
-		},
-		{
-			name: "report command with package filter",
-			args: func(out string) []string {
-				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
-				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{"aws-efs-csi-driver-operator":["4.16"]},"bundleVersions":{"aws-efs-csi-driver-operator":["4.16"]}}`), 0o644)
-				return []string{"plcc2fbc", "report", "-i", testdataInput, "-p", "aws-efs-csi-driver-operator", cdFile, out}
-			},
-			checks: func(t *testing.T, outFile string) {
-				data, err := os.ReadFile(outFile)
-				if err != nil {
-					t.Fatalf("reading report output: %v", err)
-				}
-				if !json.Valid(data) {
-					t.Fatal("report output is not valid JSON")
-				}
-				if !strings.Contains(string(data), "aws-efs-csi-driver-operator") {
-					t.Error("report should contain the requested package")
 				}
 			},
 		},

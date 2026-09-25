@@ -48,14 +48,6 @@ func main() {
 
 func run() error {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "report":
-			return runReportCommand(os.Args[2:])
-		case "fetch":
-			return runFetchCommand(os.Args[2:])
-		}
-	}
 	return runConvertCommand(os.Args[1:])
 }
 
