@@ -442,6 +442,40 @@ func TestClassifyNilCatalog(t *testing.T) {
 	}
 }
 
+func TestClassifyInvalidPLCCFullCoverage(t *testing.T) {
+	// A package with PLCC data that fails validation (PLCCStatus = INVALID)
+	// but has full catalog coverage (no gaps) should report PrimaryAction = OK.
+	// This exercises the path at classify.go:243 where len(missingVersions)==0
+	// returns early with ActionOK regardless of PLCCStatus.
+	catalog := &plcc.Catalog{Data: []plcc.Product{invalidProduct("op-invalid")}}
+	cd := &CatalogData{
+		LifecycleVersions: map[string]map[string]bool{
+			"op-invalid": {"1.0": true},
+		},
+		BundleVersions: map[string]map[string]bool{
+			"op-invalid": {"1.0": true},
+		},
+	}
+	reports := Classify(Input{
+		Catalog:     catalog,
+		CatalogData: cd,
+		Packages:    []string{"op-invalid"},
+		Validators:  plcc.SyntaxValidators(),
+	})
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+	if reports[0].PLCCStatus != PLCCStatusInvalid {
+		t.Errorf("plcc status = %q, want %q", reports[0].PLCCStatus, PLCCStatusInvalid)
+	}
+	if reports[0].PrimaryAction != ActionOK {
+		t.Errorf("primary action = %q, want %q", reports[0].PrimaryAction, ActionOK)
+	}
+	if len(reports[0].Gaps) != 0 {
+		t.Errorf("got %d gaps, want 0", len(reports[0].Gaps))
+	}
+}
+
 func TestClassifyNoLifecycleEntry(t *testing.T) {
 	// Package has bundles but no lifecycle entry in catalog — classified
 	// by PLCC availability. PLCC has valid data → needs rebuild.

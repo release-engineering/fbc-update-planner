@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -140,6 +141,26 @@ func TestRun(t *testing.T) {
 			name:    "split yaml fails on untranslatable package",
 			args:    []string{"plcc2fbc", "-i", testdataInput, "-o", "yaml", "--split", t.TempDir()},
 			wantErr: "failed FBC translation",
+		},
+		{
+			name:    "report requires catalog-data",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", t.TempDir() + "/report.json"},
+			wantErr: "--report requires --catalog-data",
+		},
+		{
+			name:    "catalog-data requires report",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--catalog-data", "data.json", t.TempDir() + "/out.json"},
+			wantErr: "--catalog-data requires --report",
+		},
+		{
+			name:    "report and dump-plcc are mutually exclusive",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--dump-plcc", "--catalog-data", "data.json", t.TempDir() + "/out.json"},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name:    "report and split are mutually exclusive",
+			args:    []string{"plcc2fbc", "-i", testdataInput, "--report", "--split", "--catalog-data", "data.json", t.TempDir()},
+			wantErr: "mutually exclusive",
 		},
 	}
 
@@ -442,6 +463,69 @@ func TestRunSuccess(t *testing.T) {
 				commaDir := filepath.Join(dir, "alpha-op,beta-op")
 				if _, err := os.Stat(commaDir); err == nil {
 					t.Errorf("should not create directory with literal comma-separated name %q", commaDir)
+				}
+			},
+		},
+		{
+			name: "report mode produces classification JSON",
+			args: func(out string) []string {
+				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
+				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{"aws-efs-csi-driver-operator":["4.16","4.17"]},"bundleVersions":{"aws-efs-csi-driver-operator":["4.16","4.17"]}}`), 0o644)
+				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", cdFile, out}
+			},
+			checks: func(t *testing.T, outFile string) {
+				data, err := os.ReadFile(outFile)
+				if err != nil {
+					t.Fatalf("reading report output: %v", err)
+				}
+				if !json.Valid(data) {
+					t.Fatal("report output is not valid JSON")
+				}
+				if !strings.Contains(string(data), "aws-efs-csi-driver-operator") {
+					t.Error("report should contain the package name")
+				}
+				if !strings.Contains(string(data), "primaryAction") {
+					t.Error("report should contain primaryAction field")
+				}
+			},
+		},
+		{
+			name: "report mode does not truncate log file",
+			args: func(out string) []string {
+				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
+				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{},"bundleVersions":{}}`), 0o644)
+				logFile := filepath.Join(filepath.Dir(out), "existing.log")
+				_ = os.WriteFile(logFile, []byte("existing content\n"), 0o644)
+				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", cdFile, "-l", logFile, out}
+			},
+			checks: func(t *testing.T, outFile string) {
+				logFile := filepath.Join(filepath.Dir(outFile), "existing.log")
+				data, err := os.ReadFile(logFile)
+				if err != nil {
+					t.Fatalf("reading log file: %v", err)
+				}
+				if string(data) != "existing content\n" {
+					t.Errorf("log file was modified in report mode; got %q, want %q", string(data), "existing content\n")
+				}
+			},
+		},
+		{
+			name: "report mode with package filter",
+			args: func(out string) []string {
+				cdFile := filepath.Join(filepath.Dir(out), "catalog-data.json")
+				_ = os.WriteFile(cdFile, []byte(`{"lifecycleVersions":{"aws-efs-csi-driver-operator":["4.16"]},"bundleVersions":{"aws-efs-csi-driver-operator":["4.16"]}}`), 0o644)
+				return []string{"plcc2fbc", "-i", testdataInput, "--report", "--catalog-data", cdFile, "-p", "aws-efs-csi-driver-operator", out}
+			},
+			checks: func(t *testing.T, outFile string) {
+				data, err := os.ReadFile(outFile)
+				if err != nil {
+					t.Fatalf("reading report output: %v", err)
+				}
+				if !json.Valid(data) {
+					t.Fatal("report output is not valid JSON")
+				}
+				if !strings.Contains(string(data), "aws-efs-csi-driver-operator") {
+					t.Error("report should contain the requested package")
 				}
 			},
 		},

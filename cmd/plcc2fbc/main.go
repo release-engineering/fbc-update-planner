@@ -118,24 +118,6 @@ func run() (err error) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	slog.Info("plcc2fbc starting", "version", versionString(), "validators", validatorsFlag)
 
-	var reportWriter io.Writer = os.Stderr
-	if logPath != "" {
-		if err := validateOutputPath(logPath, false); err != nil {
-			return fmt.Errorf("invalid log path: %w", err)
-		}
-		var lf *os.File
-		lf, err = os.Create(logPath)
-		if err != nil {
-			return fmt.Errorf("failed to create log file: %w", err)
-		}
-		defer func() {
-			if cerr := lf.Close(); cerr != nil && err == nil {
-				err = fmt.Errorf("closing log file %s: %w", logPath, cerr)
-			}
-		}()
-		reportWriter = lf
-	}
-
 	if flag.NArg() != 1 {
 		flag.Usage()
 		return fmt.Errorf("missing output path")
@@ -174,6 +156,28 @@ func run() (err error) {
 		rawCatalog.ExpandPackages()
 		rawCatalog.SortByPackage()
 		return runReport(rawCatalog, catalogDataPath, packages, writePath, validators, catalogValidators)
+	}
+
+	// Log-file setup is placed after the report-mode branch because
+	// report mode does not produce validation results. Without this
+	// ordering, -l would silently create/truncate the log file in
+	// report mode without ever writing to it.
+	var reportWriter io.Writer = os.Stderr
+	if logPath != "" {
+		if err := validateOutputPath(logPath, false); err != nil {
+			return fmt.Errorf("invalid log path: %w", err)
+		}
+		var lf *os.File
+		lf, err = os.Create(logPath)
+		if err != nil {
+			return fmt.Errorf("failed to create log file: %w", err)
+		}
+		defer func() {
+			if cerr := lf.Close(); cerr != nil && err == nil {
+				err = fmt.Errorf("closing log file %s: %w", logPath, cerr)
+			}
+		}()
+		reportWriter = lf
 	}
 
 	var writer fbc.PackageWriter
@@ -449,6 +453,22 @@ func runReport(catalog *plcc.Catalog, catalogDataPath, packages, writePath strin
 			name = strings.TrimSpace(name)
 			if name != "" {
 				pkgList = append(pkgList, name)
+			}
+		}
+		// Warn about -p packages not found in PLCC data. Report mode
+		// intentionally does not error on missing packages (unlike the
+		// normal pipeline's exit-code-3 behavior) because classification
+		// of missing-from-PLCC packages is a core use case. The warning
+		// keeps the user informed.
+		plccPkgs := make(map[string]bool)
+		for _, p := range catalog.Data {
+			for _, pkg := range p.Packages() {
+				plccPkgs[pkg] = true
+			}
+		}
+		for _, name := range pkgList {
+			if !plccPkgs[name] {
+				slog.Warn("requested package not found in PLCC data (will be classified as PLCC missing)", "package", name)
 			}
 		}
 	}

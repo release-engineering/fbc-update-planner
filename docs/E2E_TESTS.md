@@ -42,7 +42,7 @@ This complements `pkg/fbc/pipeline_test.go` (integration test at the Go API leve
 | Test | Mode | What It Verifies |
 |------|------|-------------------|
 | `TestPlccCheckOperatorsFile` | `plcc-check-operators.txt` (4 packages: pass/issues/missing/duplicate) | `summary.txt`, `validation.jsonl`, `fbc-output.yaml`, and `slog.json` message sequence match golden fixtures |
-| `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING statuses, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture |
+| `TestPlccCheckCatalogPresence` | `plcc-check-operators.txt` + `--catalog-image testdata/catalog-fbc` | `summary.txt` (PLCC/CATALOG table with OK/MISSING statuses, Action classification section, "fully done" marker) matches golden; `catalog-packages.txt` lists the one package present in the fixture; `classification.json` written |
 | `TestPlccCheckCatalogVersionCoverage` | 5-operator file + `--catalog-image testdata/catalog-fbc-versions` | Per-version coverage: full coverage → `OK`, partial → `X/Y`, no lifecycle → `MISSING`, no bundles → `OK`; PLCC OK + catalog partial → no done marker; CATALOG PARTIAL summary line; done marker only on full OK |
 | `TestPlccCheckWebhook` | `--webhook list`, `summary`, and `summary,list` | Slack payload contains exactly the selected Markdown sections, catalog-ready indicators (including partial), and workflow link |
 | `TestPlccCheckWebhookRejectsUnknownSection` | invalid `--webhook` section | Unsupported webhook sections fail before the assessment runs |

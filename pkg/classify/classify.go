@@ -283,9 +283,12 @@ func computePLCCStatus(
 }
 
 // computeCatalogStatus returns the catalog coverage string.
+// Returns "N/A" when neither lifecycle nor bundle data exists for the package,
+// "MISSING" when bundles exist but no lifecycle entry, "OK" for full coverage,
+// or "X/Y" for partial coverage.
 func computeCatalogStatus(lifecycleVersions, bundleVersions map[string]bool) string {
 	if len(lifecycleVersions) == 0 && len(bundleVersions) == 0 {
-		return "OK"
+		return "N/A"
 	}
 	if len(lifecycleVersions) == 0 {
 		return "MISSING"
