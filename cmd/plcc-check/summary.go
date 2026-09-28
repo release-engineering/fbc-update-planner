@@ -14,14 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package check
+package main
 
 import (
 	"fmt"
 	"path/filepath"
 	"strings"
-
-	"github.com/release-engineering/fbc-update-planner/pkg/classify"
 )
 
 func renderSummary(data runData) string {
@@ -41,7 +39,7 @@ func renderSummary(data runData) string {
 	if !data.options.ValidateOnly && !data.hasFBC {
 		b.WriteString("Warning: no FBC data generated\n")
 	}
-	byName := make(map[string]classify.OperatorReport, len(data.reports))
+	byName := make(map[string]OperatorReport, len(data.reports))
 	for _, r := range data.reports {
 		byName[r.Package] = r
 	}
@@ -55,7 +53,7 @@ func renderSummary(data runData) string {
 	for _, name := range data.names {
 		r := byName[name]
 		marker := " "
-		if r.PLCC == classify.PLCCStatusOK && (data.options.CatalogImage == "" || r.CatalogStatus == classify.CatalogStatusOK) {
+		if r.PLCC == PLCCStatusOK && (data.options.CatalogImage == "" || r.CatalogStatus == CatalogStatusOK) {
 			marker = "*"
 		}
 		if data.options.CatalogImage != "" {
@@ -70,12 +68,12 @@ func renderSummary(data runData) string {
 	fmt.Fprintf(&b, "  %-18s %d\n", "Total operators:", total)
 	for _, entry := range []struct {
 		label  string
-		status classify.PLCCStatus
+		status PLCCStatus
 	}{
-		{"PLCC OK:", classify.PLCCStatusOK},
-		{"PLCC DUPLICATE:", classify.PLCCStatusDuplicate},
-		{"PLCC INVALID:", classify.PLCCStatusInvalid},
-		{"PLCC MISSING:", classify.PLCCStatusMissing},
+		{"PLCC OK:", PLCCStatusOK},
+		{"PLCC DUPLICATE:", PLCCStatusDuplicate},
+		{"PLCC INVALID:", PLCCStatusInvalid},
+		{"PLCC MISSING:", PLCCStatusMissing},
 	} {
 		fmt.Fprintf(&b, "  %-18s %d / %d\n", entry.label, countPLCC(data.reports, entry.status), total)
 	}
@@ -128,7 +126,7 @@ func generatedFile(b *strings.Builder, dir, name, description string) {
 	fmt.Fprintf(b, "  %-24s %s\n", filepath.Join(dir, name), description)
 }
 
-func countPLCC(reports []classify.OperatorReport, status classify.PLCCStatus) int {
+func countPLCC(reports []OperatorReport, status PLCCStatus) int {
 	count := 0
 	for _, r := range reports {
 		if r.PLCC == status {
@@ -138,20 +136,20 @@ func countPLCC(reports []classify.OperatorReport, status classify.PLCCStatus) in
 	return count
 }
 
-func countCatalog(reports []classify.OperatorReport, status string) int {
+func countCatalog(reports []OperatorReport, status string) int {
 	count := 0
 	for _, r := range reports {
 		switch status {
 		case "OK":
-			if r.CatalogStatus == classify.CatalogStatusOK {
+			if r.CatalogStatus == CatalogStatusOK {
 				count++
 			}
 		case "MISSING":
-			if r.CatalogStatus == classify.CatalogStatusMissing {
+			if r.CatalogStatus == CatalogStatusMissing {
 				count++
 			}
 		case "PARTIAL":
-			if r.CatalogStatus != classify.CatalogStatusOK && r.CatalogStatus != classify.CatalogStatusMissing {
+			if r.CatalogStatus != CatalogStatusOK && r.CatalogStatus != CatalogStatusMissing {
 				count++
 			}
 		}
@@ -159,17 +157,17 @@ func countCatalog(reports []classify.OperatorReport, status string) int {
 	return count
 }
 
-func countReady(reports []classify.OperatorReport) int {
+func countReady(reports []OperatorReport) int {
 	count := 0
 	for _, r := range reports {
-		if r.PLCC == classify.PLCCStatusOK && r.CatalogStatus == classify.CatalogStatusOK {
+		if r.PLCC == PLCCStatusOK && r.CatalogStatus == CatalogStatusOK {
 			count++
 		}
 	}
 	return count
 }
 
-func countAction(reports []classify.OperatorReport, action classify.Action) int {
+func countAction(reports []OperatorReport, action Action) int {
 	count := 0
 	for _, r := range reports {
 		if r.PrimaryAction == action {
@@ -179,7 +177,7 @@ func countAction(reports []classify.OperatorReport, action classify.Action) int 
 	return count
 }
 
-func actionVersions(r classify.OperatorReport, action classify.Action) []string {
+func actionVersions(r OperatorReport, action Action) []string {
 	var versions []string
 	for _, gap := range r.Gaps {
 		if gap.Action == action {
@@ -189,15 +187,15 @@ func actionVersions(r classify.OperatorReport, action classify.Action) []string 
 	return versions
 }
 
-func renderActionSummary(b *strings.Builder, reports []classify.OperatorReport) {
+func renderActionSummary(b *strings.Builder, reports []OperatorReport) {
 	b.WriteString("\n=== Action classification ===\n")
-	for _, action := range []classify.Action{
-		classify.ActionFixPLCC, classify.ActionPLCCMissing, classify.ActionNoCatalogBundles,
-		classify.ActionNeedsRebuild, classify.ActionOK,
+	for _, action := range []Action{
+		ActionFixPLCC, ActionPLCCMissing, ActionNoCatalogBundles,
+		ActionNeedsRebuild, ActionOK,
 	} {
 		fmt.Fprintf(b, "  %-22s %d / %d\n", string(action)+":", countAction(reports, action), len(reports))
 	}
-	for _, action := range []classify.Action{classify.ActionFixPLCC, classify.ActionPLCCMissing, classify.ActionNeedsRebuild} {
+	for _, action := range []Action{ActionFixPLCC, ActionPLCCMissing, ActionNeedsRebuild} {
 		var lines []string
 		var reasons []string
 		for _, r := range reports {
@@ -207,12 +205,12 @@ func renderActionSummary(b *strings.Builder, reports []classify.OperatorReport) 
 			}
 			if len(versions) > 0 {
 				lines = append(lines, fmt.Sprintf("  %s: %s", r.Package, strings.Join(versions, ", ")))
-			} else if action == classify.ActionPLCCMissing {
+			} else if action == ActionPLCCMissing {
 				lines = append(lines, fmt.Sprintf("  %s: package absent from PLCC", r.Package))
 			} else {
 				lines = append(lines, fmt.Sprintf("  %s: package-level issue", r.Package))
 			}
-			if action == classify.ActionFixPLCC {
+			if action == ActionFixPLCC {
 				for _, reason := range r.Reasons {
 					reasons = append(reasons, fmt.Sprintf("    %s: %s", r.Package, reason))
 				}
@@ -231,11 +229,11 @@ func renderActionSummary(b *strings.Builder, reports []classify.OperatorReport) 
 	}
 }
 
-func renderMissingVersions(b *strings.Builder, reports []classify.OperatorReport) {
+func renderMissingVersions(b *strings.Builder, reports []OperatorReport) {
 	b.WriteString("\n=== Missing lifecycle versions ===\n")
 	count := 0
 	for _, r := range reports {
-		if r.CatalogStatus == classify.CatalogStatusOK || r.CatalogStatus == classify.CatalogStatusMissing {
+		if r.CatalogStatus == CatalogStatusOK || r.CatalogStatus == CatalogStatusMissing {
 			continue
 		}
 		var versions []string
@@ -256,27 +254,27 @@ func renderCSVLists(b *strings.Builder, data runData) {
 	b.WriteString("\n=== CSV operator lists ===\n")
 	for _, entry := range []struct {
 		label string
-		match func(classify.OperatorReport) bool
+		match func(OperatorReport) bool
 	}{
-		{"Missing", func(r classify.OperatorReport) bool { return r.PLCC == classify.PLCCStatusMissing }},
-		{"Duplicated", func(r classify.OperatorReport) bool { return r.PLCC == classify.PLCCStatusDuplicate }},
-		{"With issues", func(r classify.OperatorReport) bool { return r.PLCC == classify.PLCCStatusInvalid }},
-		{"PLCC OK", func(r classify.OperatorReport) bool { return r.PLCC == classify.PLCCStatusOK }},
+		{"Missing", func(r OperatorReport) bool { return r.PLCC == PLCCStatusMissing }},
+		{"Duplicated", func(r OperatorReport) bool { return r.PLCC == PLCCStatusDuplicate }},
+		{"With issues", func(r OperatorReport) bool { return r.PLCC == PLCCStatusInvalid }},
+		{"PLCC OK", func(r OperatorReport) bool { return r.PLCC == PLCCStatusOK }},
 	} {
 		fmt.Fprintf(b, "- %s:%s\n", entry.label, csvMatches(data, entry.match))
 	}
 	if data.options.CatalogImage != "" {
 		for _, entry := range []struct {
 			label string
-			match func(classify.OperatorReport) bool
+			match func(OperatorReport) bool
 		}{
-			{"Catalog OK", func(r classify.OperatorReport) bool { return r.CatalogStatus == classify.CatalogStatusOK }},
-			{"Catalog partial", func(r classify.OperatorReport) bool {
-				return r.CatalogStatus != classify.CatalogStatusOK && r.CatalogStatus != classify.CatalogStatusMissing
+			{"Catalog OK", func(r OperatorReport) bool { return r.CatalogStatus == CatalogStatusOK }},
+			{"Catalog partial", func(r OperatorReport) bool {
+				return r.CatalogStatus != CatalogStatusOK && r.CatalogStatus != CatalogStatusMissing
 			}},
-			{"Catalog missing", func(r classify.OperatorReport) bool { return r.CatalogStatus == classify.CatalogStatusMissing }},
-			{"Fully done", func(r classify.OperatorReport) bool {
-				return r.PLCC == classify.PLCCStatusOK && r.CatalogStatus == classify.CatalogStatusOK
+			{"Catalog missing", func(r OperatorReport) bool { return r.CatalogStatus == CatalogStatusMissing }},
+			{"Fully done", func(r OperatorReport) bool {
+				return r.PLCC == PLCCStatusOK && r.CatalogStatus == CatalogStatusOK
 			}},
 		} {
 			fmt.Fprintf(b, "- %s:%s\n", entry.label, csvMatches(data, entry.match))
@@ -284,8 +282,8 @@ func renderCSVLists(b *strings.Builder, data runData) {
 	}
 }
 
-func csvMatches(data runData, match func(classify.OperatorReport) bool) string {
-	byName := make(map[string]classify.OperatorReport, len(data.reports))
+func csvMatches(data runData, match func(OperatorReport) bool) string {
+	byName := make(map[string]OperatorReport, len(data.reports))
 	for _, r := range data.reports {
 		byName[r.Package] = r
 	}

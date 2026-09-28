@@ -14,9 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package assessment joins raw PLCC products with the results of the shared
-// validation and FBC translation pipeline.
-package assessment
+package main
 
 import (
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
@@ -41,7 +39,7 @@ type Result struct {
 // Evaluate translates each validated package once when translate is true.
 // The original PLCC product remains available even when validation rejects
 // it, so catalog gaps need no joins over generated files.
-func Evaluate(raw *plcc.Catalog, validated ValidationResult, translate bool) Result {
+func Evaluate(raw *plcc.Catalog, validated plcc.ValidationResult, translate bool) Result {
 	result := Result{Packages: make(map[string]*Package)}
 	for i := range raw.Data {
 		product := &raw.Data[i]

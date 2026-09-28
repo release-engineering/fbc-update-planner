@@ -16,11 +16,19 @@
 ```
 cmd/plcc2fbc/main.go          Conversion CLI entry point, shared helpers, exit codes
 cmd/plcc2fbc/convert_command.go  Conversion flags and output orchestration
-cmd/plcc-check/main.go        Daily checker CLI
+cmd/plcc-check/main.go        Daily checker CLI flags and exit handling
+cmd/plcc-check/check.go       Checker orchestration and artifact writing
+cmd/plcc-check/assessment.go  Per-package PLCC/FBC outcomes for the checker
+cmd/plcc-check/catalog.go     Parse the JSON object stream from opm render
+cmd/plcc-check/classify.go    Catalog gap classification rules
+cmd/plcc-check/summary.go     Text summary rendering
+cmd/plcc-check/slack.go       Slack payload rendering
+cmd/plcc-check/opm.go         opm subprocess and webhook option handling
 cmd/plcc2fbc/version.go       Version/commit variables injected via ldflags
 cmd/plcc2fbc/main_test.go     Tests for CLI (run function)
 pkg/plcc/plcc.go              PLCC API client, data types, filtering, sorting
 pkg/plcc/validation.go        PLCC validator registry — per-product and catalog-level checks
+pkg/plcc/selection.go         Shared PLCC selection and validation pipeline
 pkg/plcc/plcc_test.go         Tests for PLCC package
 pkg/plcc/validation_test.go   Tests for PLCC validators
 pkg/fbc/doc.go                Package documentation
@@ -35,12 +43,6 @@ pkg/fbc/writer.go             PackageWriter interface + JSON/YAML serializers
 pkg/fbc/writer_test.go        Tests for writers
 pkg/fbc/pipeline_test.go      Integration test — full pipeline vs reference output
 pkg/fbc/testdata/             Test fixtures (plcc.json, reference-fbc.yaml, etc.)
-pkg/classify/classify.go      Catalog gap classification — PLCC vs OCP catalog comparison
-pkg/classify/classify_test.go Tests for classify package
-pkg/catalog/render.go         Parse the JSON object stream from opm render
-pkg/assessment/validation.go  Shared PLCC selection and validation pipeline
-pkg/assessment/assessment.go  Per-package PLCC/FBC outcomes from one pipeline run
-pkg/check/                    Daily assessment, summary and Slack rendering
 pkg/report/result.go          Shared ValidationResult type + JSON-lines log writer
 test/e2e/e2e_test.go          End-to-end tests — build binary, run against fixture, compare output
 test/e2e/plcc_check_test.go   End-to-end tests for scripts/plcc-check.sh against fixture, compare output
@@ -101,7 +103,7 @@ The checker accepts `-i`, `-o`, `--plcc`, `--validators`, `--catalog-image`, `--
 
 ```
 PLCC API (or -i file) → plcc.Fetch()/Load()
-  → assessment.Validate()             # selection, catalog-level and product validators; returns structured rejections
+  → plcc.SelectAndValidate()           # selection, catalog-level and product validators; returns structured rejections
   → catalog.ExpandPackages()          # split comma-separated package names into separate products
   → catalog.SortByPackage()           # re-sort expanded products
   → writeFBC()                        # single-file mode (default):
@@ -116,13 +118,14 @@ With --dump-plcc:
 
 With plcc-check:
   → load raw PLCC once; resolve validators on the full raw catalog
-  → assessment.Validate() and assessment.Evaluate()  # shared validation and full-package FBC translation
-  → opm render <catalog-image>       # when requested; parse JSON directly with catalog.ParseRender()
-  → classify.Classify()              # compare those results with coverage; check missing versions individually
+  → plcc.SelectAndValidate() and Evaluate()  # shared validation and checker-local full-package FBC translation
+  → opm render <catalog-image>       # when requested; parse JSON directly with ParseRender()
+  → Classify()                       # compare those results with coverage; check missing versions individually
   → render summary.txt, classification.json, and Slack payload from the same reports
 ```
 
 The shell wrapper contains no assessment logic. `plcc-check` is built for repository workflows; GoReleaser and the container continue to publish `plcc2fbc` only.
+The checker-specific assessment, catalog parsing, classification, and rendering code lives in `cmd/plcc-check`; shared PLCC and FBC behavior stays in `pkg/plcc` and `pkg/fbc`.
 
 ### Three pipeline layers
 
@@ -145,12 +148,13 @@ The shell wrapper contains no assessment logic. `plcc-check` is built for reposi
 - `fbc.Filter` — `func(*Package) []string` — output cleanup pipeline callback
 - `fbc.PackageWriter` — interface for serializing packages (JSON, JSON-pretty, YAML)
 - `report.ValidationResult` — structured JSON logged to stderr (or to a file via `-l`) for rejected/warned packages
-- `classify.Action` — primary call for an operator: `OK`, `PLCC missing`, `Fix PLCC`, `Needs rebuild`, `No catalog bundles`
-- `classify.PLCCStatus` — PLCC data quality state: `OK`, `MISSING`, `INVALID`, `DUPLICATE`
-- `classify.VersionGap` — a missing MAJOR.MINOR version with its classification and reasons
-- `classify.OperatorReport` — classification result for one operator package
-- `classify.CatalogData` — in-memory catalog lifecycle and bundle version sets parsed from opm output
-- `classify.Input` — input struct for `Classify()`: raw catalog, evaluated results, catalog data, packages
+- `plcc.ValidationResult` — selected products and structured PLCC validation outcomes
+- `Action` — checker-local primary call for an operator: `OK`, `PLCC missing`, `Fix PLCC`, `Needs rebuild`, `No catalog bundles`
+- `PLCCStatus` — checker-local PLCC data quality state: `OK`, `MISSING`, `INVALID`, `DUPLICATE`
+- `VersionGap` — checker-local missing MAJOR.MINOR version with its classification and reasons
+- `OperatorReport` — checker-local classification result for one operator package
+- `CatalogData` — checker-local catalog lifecycle and bundle version sets parsed from opm output
+- `Input` — checker-local input struct for `Classify()`: evaluated results, catalog data, packages
 
 ### FBC Schema
 

@@ -51,13 +51,6 @@ func run() error {
 	return runConvertCommand(os.Args[1:])
 }
 
-func loadCatalog(inputPath string) (*plcc.Catalog, error) {
-	if inputPath != "" {
-		return plcc.Load(inputPath)
-	}
-	return plcc.Fetch()
-}
-
 // parseValidatorNames splits a comma-separated flag value into trimmed,
 // non-empty validator names.
 func parseValidatorNames(value string) []string {

@@ -14,18 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package classify compares PLCC lifecycle data with OCP catalog contents
-// (lifecycle entries and shipped bundles) to determine what action each
-// operator needs: a PLCC data fix, an operator rebuild, or nothing.
-package classify
+package main
 
 import (
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/release-engineering/fbc-update-planner/pkg/assessment"
-	"github.com/release-engineering/fbc-update-planner/pkg/catalog"
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
@@ -112,54 +107,27 @@ type OperatorReport struct {
 	Gaps          []VersionGap  `json:"gaps,omitempty"`
 }
 
-// CatalogData names the normalized catalog view consumed by classification.
-type CatalogData = catalog.Data
-
 // Input holds everything needed to classify a set of operators.
 type Input struct {
-	// Catalog is the loaded PLCC catalog (before filtering/validation).
-	Catalog *plcc.Catalog
-	// Evaluated is the result of the shared validation and translation
-	// pipeline. If omitted, Classify evaluates Catalog itself.
-	Evaluated *assessment.Result
+	// Evaluated is the result of PLCC validation and FBC translation.
+	Evaluated *Result
 	// CatalogData holds lifecycle and bundle version sets from the OCP catalog.
 	CatalogData *CatalogData
 	// Packages to assess. If empty, all packages with PLCC data, lifecycle
 	// entries, or bundles are assessed.
 	Packages []string
-	// Validators are per-product PLCC validators to apply.
-	Validators []plcc.Validator
-	// CatalogValidators are cross-product PLCC validators (e.g.
-	// ValidateNoDuplicates). When omitted, duplicate-package detection is
-	// skipped and PLCCStatusDuplicate will never be returned — duplicates
-	// are silently resolved by first-match-wins in buildPLCCIndex.
-	CatalogValidators []plcc.CatalogValidator
 }
 
-// Classify runs the comparison and returns an OperatorReport per package,
-// sorted alphabetically. The classification respects the validators selected
-// for the run (typically via --validators).
+// Classify compares prepared PLCC outcomes with catalog coverage and returns
+// an OperatorReport per package, sorted alphabetically.
 func Classify(input Input) []OperatorReport {
 	if input.CatalogData == nil {
 		return nil
 	}
-	if input.Catalog == nil {
+	if input.Evaluated == nil {
 		return nil
 	}
-
 	evaluated := input.Evaluated
-	if evaluated == nil {
-		validated, err := assessment.Validate(input.Catalog, assessment.ValidationOptions{
-			Validators:        input.Validators,
-			CatalogValidators: input.CatalogValidators,
-			Strict:            true,
-		})
-		if err != nil { // No selection or I/O occurs in this path.
-			return nil
-		}
-		result := assessment.Evaluate(input.Catalog, validated, true)
-		evaluated = &result
-	}
 
 	// Determine the set of packages to assess.
 	packages := input.Packages
@@ -181,7 +149,7 @@ func Classify(input Input) []OperatorReport {
 
 // allPackages returns the union of packages with PLCC data, lifecycle
 // entries, and catalog bundles, sorted alphabetically.
-func allPackages(plccIndex map[string]*assessment.Package, cd *CatalogData) []string {
+func allPackages(plccIndex map[string]*Package, cd *CatalogData) []string {
 	seen := make(map[string]bool)
 	for pkg := range plccIndex {
 		seen[pkg] = true
@@ -206,7 +174,7 @@ func allPackages(plccIndex map[string]*assessment.Package, cd *CatalogData) []st
 // classifyPackage determines the status and gaps for a single package.
 func classifyPackage(
 	pkg string,
-	state *assessment.Package,
+	state *Package,
 	cd *CatalogData,
 ) OperatorReport {
 	r := OperatorReport{Package: pkg}
@@ -391,7 +359,7 @@ func classifyVersionGaps(
 //  6. Otherwise → Needs rebuild
 //
 // Catalog rejections must precede the version-existence check because
-// buildPLCCIndex resolves duplicates to the first-match product. A version
+// Evaluate resolves duplicates to the first-match product. A version
 // that exists only in the non-indexed duplicate would otherwise be
 // misclassified as "PLCC missing" instead of "Fix PLCC".
 func classifyOneVersion(
@@ -406,7 +374,7 @@ func classifyOneVersion(
 
 	// Check for catalog-level rejection (e.g., duplicate package name).
 	// This must precede version-existence checks: when a package appears in
-	// multiple PLCC products, the index resolves to only one. A version
+	// multiple PLCC products, the result resolves to only one. A version
 	// absent from the indexed product but present in a duplicate would be
 	// wrongly classified as "PLCC missing" if we checked existence first.
 	if len(catalogReasons) > 0 {

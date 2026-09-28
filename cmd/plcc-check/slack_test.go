@@ -14,15 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package check
+package main
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
-
-	"github.com/release-engineering/fbc-update-planner/pkg/classify"
 )
 
 func TestSlackLargeReportLinksToCompleteArtifacts(t *testing.T) {
@@ -33,11 +31,11 @@ func TestSlackLargeReportLinksToCompleteArtifacts(t *testing.T) {
 	for i := range 100 {
 		name := strings.Repeat("é", 1200) + fmt.Sprint(i)
 		data.names = append(data.names, name)
-		data.reports = append(data.reports, classify.OperatorReport{
+		data.reports = append(data.reports, OperatorReport{
 			Package:       name,
-			PrimaryAction: classify.ActionPLCCMissing,
-			PLCC:          classify.PLCCStatusMissing,
-			CatalogStatus: classify.CatalogStatusMissing,
+			PrimaryAction: ActionPLCCMissing,
+			PLCC:          PLCCStatusMissing,
+			CatalogStatus: CatalogStatusMissing,
 		})
 	}
 	payload := renderSlack(data)

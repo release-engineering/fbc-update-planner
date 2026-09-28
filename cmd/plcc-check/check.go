@@ -14,9 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package check runs the daily operator lifecycle assessment and renders its
-// artifacts from one in-memory result model.
-package check
+package main
 
 import (
 	"context"
@@ -29,8 +27,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/release-engineering/fbc-update-planner/pkg/assessment"
-	"github.com/release-engineering/fbc-update-planner/pkg/classify"
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
@@ -49,7 +45,7 @@ type Options struct {
 type runData struct {
 	options Options
 	names   []string
-	reports []classify.OperatorReport
+	reports []OperatorReport
 	hasFBC  bool
 	runURL  string
 }
@@ -97,7 +93,7 @@ func Run(ctx context.Context, opts Options, stdout, stderr io.Writer) error {
 		return fmt.Errorf("invalid --validators flag: %w", err)
 	}
 	logger.Info("resolved validators", "product", len(validators), "catalog", len(catalogValidators))
-	validated, err := assessment.Validate(raw, assessment.ValidationOptions{
+	validated, err := plcc.SelectAndValidate(raw, plcc.ValidationOptions{
 		Packages:          requested,
 		SelectPackages:    opts.Operators != "",
 		Validators:        validators,
@@ -115,7 +111,7 @@ func Run(ctx context.Context, opts Options, stdout, stderr io.Writer) error {
 	logger.Info("PLCC catalog validation", "passed", validated.SelectedCount-validated.CatalogFiltered, "filtered", validated.CatalogFiltered)
 	logger.Info("PLCC product validation", "passed", validated.Catalog.Len(), "filtered", validated.ProductFiltered)
 	translate := !opts.ValidateOnly || opts.CatalogImage != ""
-	evaluated := assessment.Evaluate(raw, validated, translate)
+	evaluated := Evaluate(raw, validated, translate)
 	if translate {
 		logger.Info("FBC translation", "passed", len(evaluated.FBC), "filtered", len(evaluated.Failures))
 	} else {
@@ -142,7 +138,7 @@ func Run(ctx context.Context, opts Options, stdout, stderr io.Writer) error {
 		}
 	}
 
-	var catalogData *classify.CatalogData
+	var catalogData *CatalogData
 	if opts.CatalogImage != "" {
 		catalogData, err = renderCatalog(ctx, opts.CatalogImage)
 		if err != nil {
@@ -153,15 +149,14 @@ func Run(ctx context.Context, opts Options, stdout, stderr io.Writer) error {
 			return err
 		}
 	} else {
-		catalogData = &classify.CatalogData{}
+		catalogData = &CatalogData{}
 	}
 
 	names := requested
 	if opts.Operators == "" {
 		names = allNames(evaluated, catalogData)
 	}
-	reports := classify.Classify(classify.Input{
-		Catalog:     raw,
+	reports := Classify(Input{
 		Evaluated:   &evaluated,
 		CatalogData: catalogData,
 		Packages:    names,
@@ -225,7 +220,7 @@ func commaNames(value string) []string {
 	return names
 }
 
-func allNames(evaluated assessment.Result, cd *classify.CatalogData) []string {
+func allNames(evaluated Result, cd *CatalogData) []string {
 	seen := make(map[string]bool)
 	for name := range evaluated.Packages {
 		seen[name] = true
@@ -275,7 +270,7 @@ func writeFBC(path string, packages []*fbc.Package) error {
 	return f.Close()
 }
 
-func writeCatalogPackages(path string, cd *classify.CatalogData) error {
+func writeCatalogPackages(path string, cd *CatalogData) error {
 	names := make([]string, 0, len(cd.LifecyclePackages))
 	for name := range cd.LifecyclePackages {
 		names = append(names, name)

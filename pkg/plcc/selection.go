@@ -14,43 +14,42 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package assessment
+package plcc
 
 import (
 	"errors"
 	"sort"
 
-	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
 )
 
 type ValidationOptions struct {
 	Packages          []string
 	SelectPackages    bool
-	Validators        []plcc.Validator
-	CatalogValidators []plcc.CatalogValidator
+	Validators        []Validator
+	CatalogValidators []CatalogValidator
 	Strict            bool
 	AllowMissing      bool
 }
 
 type ValidationResult struct {
-	Catalog           *plcc.Catalog
+	Catalog           *Catalog
 	MissingPackages   []string
 	Validation        []report.ValidationResult
-	CatalogRejections plcc.CatalogRejections
+	CatalogRejections CatalogRejections
 	ProductRejections map[string][]string
 	SelectedCount     int
 	CatalogFiltered   int
 	ProductFiltered   int
 }
 
-// Validate selects and checks products without mutating raw. Catalog checks
+// SelectAndValidate selects and checks products without mutating raw. Catalog checks
 // run before product checks, matching the conversion pipeline's rejection
 // order. ProductRejections is keyed by each expanded package name.
-func Validate(raw *plcc.Catalog, opts ValidationOptions) (ValidationResult, error) {
+func SelectAndValidate(raw *Catalog, opts ValidationOptions) (ValidationResult, error) {
 	result := ValidationResult{
-		Catalog:           &plcc.Catalog{Data: append([]plcc.Product(nil), raw.Data...)},
-		CatalogRejections: make(plcc.CatalogRejections),
+		Catalog:           &Catalog{Data: append([]Product(nil), raw.Data...)},
+		CatalogRejections: make(CatalogRejections),
 		ProductRejections: make(map[string][]string),
 	}
 	catalog := result.Catalog
@@ -59,7 +58,7 @@ func Validate(raw *plcc.Catalog, opts ValidationOptions) (ValidationResult, erro
 			if !opts.AllowMissing {
 				return ValidationResult{}, err
 			}
-			var missing *plcc.PackagesNotFoundError
+			var missing *PackagesNotFoundError
 			if !errors.As(err, &missing) {
 				return ValidationResult{}, err
 			}
@@ -89,9 +88,9 @@ func Validate(raw *plcc.Catalog, opts ValidationOptions) (ValidationResult, erro
 	}
 
 	beforeProduct := catalog.Len()
-	filtered := make([]plcc.Product, 0, beforeProduct)
+	filtered := make([]Product, 0, beforeProduct)
 	for _, product := range catalog.Data {
-		reasons := plcc.ValidateProduct(product, opts.Validators...)
+		reasons := ValidateProduct(product, opts.Validators...)
 		if len(reasons) == 0 {
 			filtered = append(filtered, product)
 			continue

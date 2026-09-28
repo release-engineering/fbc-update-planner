@@ -14,15 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package check
+package main
 
 import (
 	"fmt"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/release-engineering/fbc-update-planner/pkg/classify"
 )
 
 type slackText struct {
@@ -91,10 +89,10 @@ func slackSummary(data runData) string {
 		label string
 		count int
 	}{
-		{"PLCC valid", countPLCC(data.reports, classify.PLCCStatusOK)},
-		{"PLCC duplicate", countPLCC(data.reports, classify.PLCCStatusDuplicate)},
-		{"PLCC invalid", countPLCC(data.reports, classify.PLCCStatusInvalid)},
-		{"PLCC missing", countPLCC(data.reports, classify.PLCCStatusMissing)},
+		{"PLCC valid", countPLCC(data.reports, PLCCStatusOK)},
+		{"PLCC duplicate", countPLCC(data.reports, PLCCStatusDuplicate)},
+		{"PLCC invalid", countPLCC(data.reports, PLCCStatusInvalid)},
+		{"PLCC missing", countPLCC(data.reports, PLCCStatusMissing)},
 	} {
 		fmt.Fprintf(&b, "• %s: %d / %d\n", entry.label, entry.count, total)
 	}
@@ -110,9 +108,9 @@ func slackSummary(data runData) string {
 			fmt.Fprintf(&b, "• %s: %d / %d\n", entry.label, entry.count, total)
 		}
 		b.WriteString("\n*Actions*\n")
-		for _, action := range []classify.Action{
-			classify.ActionFixPLCC, classify.ActionPLCCMissing, classify.ActionNoCatalogBundles,
-			classify.ActionNeedsRebuild, classify.ActionOK,
+		for _, action := range []Action{
+			ActionFixPLCC, ActionPLCCMissing, ActionNoCatalogBundles,
+			ActionNeedsRebuild, ActionOK,
 		} {
 			fmt.Fprintf(&b, "• %s: %d / %d\n", action, countAction(data.reports, action), total)
 		}
@@ -125,7 +123,7 @@ func readyLines(data runData) []string {
 	var lines []string
 	for _, name := range data.names {
 		r := byName[name]
-		if r.PLCC == classify.PLCCStatusOK && r.CatalogStatus == classify.CatalogStatusOK {
+		if r.PLCC == PLCCStatusOK && r.CatalogStatus == CatalogStatusOK {
 			lines = append(lines, "- `"+name+"`")
 		}
 	}
@@ -151,7 +149,7 @@ func operatorLines(data runData) []string {
 			continue
 		}
 		marker := "  "
-		if r.PLCC == classify.PLCCStatusOK && r.CatalogStatus == classify.CatalogStatusOK {
+		if r.PLCC == PLCCStatusOK && r.CatalogStatus == CatalogStatusOK {
 			marker = "✅"
 		}
 		lines = append(lines, fmt.Sprintf("%s  %-*s  PLCC: %-9s  Catalog: %-9s  %s", marker, maxName, name, r.PLCC, r.CatalogStatus, r.PrimaryAction))
@@ -162,9 +160,9 @@ func operatorLines(data runData) []string {
 	return lines
 }
 
-func actionLines(reports []classify.OperatorReport) []string {
+func actionLines(reports []OperatorReport) []string {
 	var lines []string
-	for _, action := range []classify.Action{classify.ActionFixPLCC, classify.ActionPLCCMissing, classify.ActionNeedsRebuild} {
+	for _, action := range []Action{ActionFixPLCC, ActionPLCCMissing, ActionNeedsRebuild} {
 		var entries []string
 		for _, r := range reports {
 			versions := actionVersions(r, action)
@@ -173,7 +171,7 @@ func actionLines(reports []classify.OperatorReport) []string {
 			}
 			detail := strings.Join(versions, ", ")
 			if detail == "" {
-				if action == classify.ActionPLCCMissing {
+				if action == ActionPLCCMissing {
 					detail = "package absent from PLCC"
 				} else {
 					detail = "package-level issue"
@@ -193,8 +191,8 @@ func actionLines(reports []classify.OperatorReport) []string {
 	return lines
 }
 
-func reportIndex(reports []classify.OperatorReport) map[string]classify.OperatorReport {
-	index := make(map[string]classify.OperatorReport, len(reports))
+func reportIndex(reports []OperatorReport) map[string]OperatorReport {
+	index := make(map[string]OperatorReport, len(reports))
 	for _, r := range reports {
 		index[r.Package] = r
 	}

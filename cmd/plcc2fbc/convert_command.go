@@ -27,7 +27,6 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/release-engineering/fbc-update-planner/pkg/assessment"
 	"github.com/release-engineering/fbc-update-planner/pkg/fbc"
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 	"github.com/release-engineering/fbc-update-planner/pkg/report"
@@ -234,7 +233,13 @@ func writePackageToDir(dir, pkgName string, writer fbc.PackageWriter, pkg *fbc.P
 }
 
 func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMissing bool, reportWriter io.Writer) (*plcc.Catalog, error) {
-	raw, err := loadCatalog(inputPath)
+	var raw *plcc.Catalog
+	var err error
+	if inputPath != "" {
+		raw, err = plcc.Load(inputPath)
+	} else {
+		raw, err = plcc.Fetch()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("loading PLCC data: %w", err)
 	}
@@ -247,7 +252,7 @@ func loadAndValidate(inputPath, packages, validatorsFlag string, strict, allowMi
 	slog.Info("resolved validators", "product", len(validators), "catalog", len(catalogValidators))
 
 	slog.Info("fetched products from PLCC", "count", raw.Len())
-	result, err := assessment.Validate(raw, assessment.ValidationOptions{
+	result, err := plcc.SelectAndValidate(raw, plcc.ValidationOptions{
 		Packages:          parseValidatorNames(packages),
 		SelectPackages:    packages != "",
 		Validators:        validators,

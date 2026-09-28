@@ -23,8 +23,6 @@ import (
 	"os"
 
 	flag "github.com/spf13/pflag"
-
-	"github.com/release-engineering/fbc-update-planner/pkg/check"
 )
 
 func main() {
@@ -35,7 +33,7 @@ func main() {
 }
 
 func run(args []string) error {
-	var opts check.Options
+	var opts Options
 	var help bool
 	flags := flag.NewFlagSet("plcc-check", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
@@ -70,5 +68,5 @@ func run(args []string) error {
 	if flags.NArg() == 1 {
 		opts.Operators = flags.Arg(0)
 	}
-	return check.Run(context.Background(), opts, os.Stdout, os.Stderr)
+	return Run(context.Background(), opts, os.Stdout, os.Stderr)
 }

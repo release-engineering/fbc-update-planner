@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package check
+package main
 
 import (
 	"bytes"
@@ -23,12 +23,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
-	"github.com/release-engineering/fbc-update-planner/pkg/catalog"
-	"github.com/release-engineering/fbc-update-planner/pkg/classify"
 )
 
-func renderCatalog(parent context.Context, image string) (*classify.CatalogData, error) {
+func renderCatalog(parent context.Context, image string) (*CatalogData, error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "opm", "render", image)
@@ -41,7 +38,7 @@ func renderCatalog(parent context.Context, image string) (*classify.CatalogData,
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting opm render: %w", err)
 	}
-	data, parseErr := catalog.ParseRender(stdout)
+	data, parseErr := ParseRender(stdout)
 	if parseErr != nil {
 		cancel()
 	}

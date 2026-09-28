@@ -14,8 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package catalog reads the JSON object stream produced by opm render.
-package catalog
+package main
 
 import (
 	"encoding/json"
@@ -28,8 +27,8 @@ import (
 
 var bundleVersionPattern = regexp.MustCompile(`^([0-9]+)\.([0-9]+)(?:\.([0-9]+))?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 
-// Data is the normalized catalog view used by coverage and action reports.
-type Data struct {
+// CatalogData is the normalized catalog view used by coverage and action reports.
+type CatalogData struct {
 	// LifecyclePackages includes entries with no versions.
 	LifecyclePackages map[string]bool
 	// LifecycleVersions holds MAJOR.MINOR version sets by package.
@@ -54,8 +53,8 @@ type renderObject struct {
 
 // ParseRender consumes opm's JSON object stream into version sets. The
 // presence of a lifecycle entry is recorded even if it has no versions.
-func ParseRender(r io.Reader) (*Data, error) {
-	data := &Data{
+func ParseRender(r io.Reader) (*CatalogData, error) {
+	data := &CatalogData{
 		LifecyclePackages: make(map[string]bool),
 		LifecycleVersions: make(map[string]map[string]bool),
 		BundleVersions:    make(map[string]map[string]bool),

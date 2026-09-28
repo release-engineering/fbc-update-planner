@@ -14,13 +14,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package classify
+package main
 
 import (
 	"testing"
 
 	"github.com/release-engineering/fbc-update-planner/pkg/plcc"
 )
+
+type classifyFixtureInput struct {
+	Catalog           *plcc.Catalog
+	CatalogData       *CatalogData
+	Packages          []string
+	Validators        []plcc.Validator
+	CatalogValidators []plcc.CatalogValidator
+}
+
+func classifyFixture(t *testing.T, input classifyFixtureInput) []OperatorReport {
+	t.Helper()
+	if input.Catalog == nil {
+		return Classify(Input{CatalogData: input.CatalogData, Packages: input.Packages})
+	}
+	validated, err := plcc.SelectAndValidate(input.Catalog, plcc.ValidationOptions{
+		Validators:        input.Validators,
+		CatalogValidators: input.CatalogValidators,
+		Strict:            true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evaluated := Evaluate(input.Catalog, validated, true)
+	return Classify(Input{Evaluated: &evaluated, CatalogData: input.CatalogData, Packages: input.Packages})
+}
 
 // validProduct builds a PLCC product with parseable timestamps that will
 // pass syntax validators and produce valid FBC output.
@@ -72,7 +97,7 @@ func TestClassifyFullCoverage(t *testing.T) {
 			"op-a": {"1.0": true, "1.1": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
@@ -104,7 +129,7 @@ func TestClassifyPreTruncatedBundleVersions(t *testing.T) {
 			"op-a": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
@@ -125,7 +150,7 @@ func TestClassifyPLCCMissingProduct(t *testing.T) {
 			"op-missing": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-missing"},
@@ -154,7 +179,7 @@ func TestClassifyPLCCMissingVersion(t *testing.T) {
 			"op-a": {"1.0": true, "1.1": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
@@ -197,7 +222,7 @@ func TestClassifyFixPLCCValidatorRejection(t *testing.T) {
 			"op-bad": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-bad"},
@@ -242,7 +267,7 @@ func TestClassifyFixPLCCConversionRejection(t *testing.T) {
 			"op-conv": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-conv"},
@@ -258,7 +283,7 @@ func TestClassifyFixPLCCConversionRejection(t *testing.T) {
 func TestClassifyRejectsWholePackageForSiblingConversionFailure(t *testing.T) {
 	product := validProduct("op-a", "1.0", "1.1")
 	product.Versions[1].Phases[0].StartDate = "invalid-date"
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog: &plcc.Catalog{Data: []plcc.Product{product}},
 		CatalogData: &CatalogData{BundleVersions: map[string]map[string]bool{
 			"op-a": {"1.0": true},
@@ -279,7 +304,7 @@ func TestClassifyRejectsWholePackageForSiblingConversionFailure(t *testing.T) {
 func TestClassifyMixedInvalidMissingAndRebuildGaps(t *testing.T) {
 	product := validProduct("op-a", "1.0", "1.1")
 	product.Versions[1].Phases[0].StartDate = "invalid-date"
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog: &plcc.Catalog{Data: []plcc.Product{product}},
 		CatalogData: &CatalogData{BundleVersions: map[string]map[string]bool{
 			"op-a": {"1.0": true, "1.1": true, "1.2": true},
@@ -310,7 +335,7 @@ func TestClassifyNeedsRebuild(t *testing.T) {
 			"op-a": {"1.0": true, "1.1": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
@@ -340,7 +365,7 @@ func TestClassifyNoCatalogBundles(t *testing.T) {
 		},
 		BundleVersions: map[string]map[string]bool{},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
@@ -362,7 +387,7 @@ func TestClassifyNoCatalogBundlesPLCCMissing(t *testing.T) {
 		LifecycleVersions: map[string]map[string]bool{},
 		BundleVersions:    map[string]map[string]bool{},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-missing"},
@@ -385,7 +410,7 @@ func TestClassifyMixedGaps(t *testing.T) {
 			"op-a": {"1.0": true, "1.1": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
@@ -430,7 +455,7 @@ func TestClassifyBundleOnlyPackageAllOperators(t *testing.T) {
 			"bundle-only": {"2.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		// No Packages → all operators mode.
@@ -450,7 +475,7 @@ func TestClassifyBundleOnlyPackageAllOperators(t *testing.T) {
 }
 
 func TestClassifyLifecycleOnlyPackageAllOperators(t *testing.T) {
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog: &plcc.Catalog{},
 		CatalogData: &CatalogData{LifecyclePackages: map[string]bool{
 			"lifecycle-only": true,
@@ -494,7 +519,7 @@ func TestClassifyPriorityOrdering(t *testing.T) {
 
 func TestClassifyNilCatalogData(t *testing.T) {
 	catalog := &plcc.Catalog{Data: []plcc.Product{validProduct("op-a", "1.0")}}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: nil,
 	})
@@ -503,17 +528,17 @@ func TestClassifyNilCatalogData(t *testing.T) {
 	}
 }
 
-func TestClassifyNilCatalog(t *testing.T) {
+func TestClassifyNilEvaluated(t *testing.T) {
 	cd := &CatalogData{
 		LifecycleVersions: map[string]map[string]bool{},
 		BundleVersions:    map[string]map[string]bool{"op-a": {"1.0": true}},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     nil,
 		CatalogData: cd,
 	})
 	if reports != nil {
-		t.Errorf("expected nil reports with nil Catalog, got %d", len(reports))
+		t.Errorf("expected nil reports with nil Evaluated, got %d", len(reports))
 	}
 }
 
@@ -529,7 +554,7 @@ func TestClassifyInvalidPLCCFullCoverage(t *testing.T) {
 			"op-invalid": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-invalid"},
@@ -565,7 +590,7 @@ func TestClassifyPLCCStatusDuplicate(t *testing.T) {
 			"op-dup": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:           catalog,
 		CatalogData:       cd,
 		Packages:          []string{"op-dup"},
@@ -604,7 +629,7 @@ func TestClassifyPLCCStatusDuplicateNonIndexedVersion(t *testing.T) {
 			"op-dup": {"1.1": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:           catalog,
 		CatalogData:       cd,
 		Packages:          []string{"op-dup"},
@@ -652,7 +677,7 @@ func TestClassifyMissingVersionWithInvalidProduct(t *testing.T) {
 			"op-mixed": {"1.0": true, "1.1": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-mixed"},
@@ -692,7 +717,7 @@ func TestClassifyNoLifecycleEntry(t *testing.T) {
 			"op-a": {"1.0": true},
 		},
 	}
-	reports := Classify(Input{
+	reports := classifyFixture(t, classifyFixtureInput{
 		Catalog:     catalog,
 		CatalogData: cd,
 		Packages:    []string{"op-a"},
