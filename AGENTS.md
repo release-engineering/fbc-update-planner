@@ -184,7 +184,7 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 
 New tools that serve a different purpose than PLCC→FBC translation should be separate binaries under `cmd/`, not new flags on `plcc2fbc`. The `plcc2fbc` binary is specifically for converting PLCC lifecycle data to FBC YAML — assessment, reporting, classification, and catalog comparison tools belong in their own command (e.g., `cmd/plcc-check`).
 
-**Decision test:** If the proposed feature does not produce FBC output, it does not belong in `plcc2fbc`.
+**Decision test:** If the proposed feature does not produce FBC output and is not a diagnostic or introspection aid for the PLCC-to-FBC pipeline, it does not belong in `plcc2fbc`.
 
 ### Shared library pattern
 
