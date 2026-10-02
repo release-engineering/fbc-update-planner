@@ -1,5 +1,5 @@
 # Keep default in sync with the VERSION file; override with --build-arg VERSION=x.y.z
-ARG VERSION=0.1.0
+ARG VERSION=0.1.1
 # COMMIT is injected by the CI pipeline (Tekton/Konflux); empty when building locally without .git
 ARG COMMIT=""
 

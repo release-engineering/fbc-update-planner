@@ -11,6 +11,14 @@ This document describes how to create a new release of `plcc2fbc`.
 
 ### 1. Bump the version
 
+Start a release branch from the latest `main`:
+
+```sh
+git switch main
+git pull --ff-only origin main
+git switch -c release/vX.Y.Z
+```
+
 Update the `VERSION` file at the repository root:
 
 ```sh
@@ -34,16 +42,28 @@ git add VERSION Dockerfile
 git commit -m "release: vX.Y.Z"
 ```
 
-### 4. Tag the release
+### 4. Open and merge a pull request
+
+Open a pull request targeting `main` with the version bump. Wait for CI to
+pass and the pull request to be approved and merged before creating the
+release tag.
+
+### 5. Tag the release on main
+
+Switch to `main` and pull the merged changes. Confirm that `VERSION` and
+the Dockerfile's default `VERSION` ARG match the intended release, then
+tag the merged commit:
 
 ```sh
+git switch main
+git pull --ff-only origin main
 git tag vX.Y.Z
 ```
 
-### 5. Push
+### 6. Push the release tag
 
 ```sh
-git push origin main --tags
+git push origin vX.Y.Z
 ```
 
 Pushing the tag triggers the **Release** GitHub Actions workflow
