@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-var binaryPath string
+var binaryPath, plccCheckBinaryPath string
 
 func TestMain(m *testing.M) {
 	tmp, err := os.MkdirTemp("", "plcc2fbc-e2e-*")
@@ -42,13 +42,17 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	binaryPath = filepath.Join(tmp, "plcc2fbc")
-	cmd := exec.Command("go", "build", "-o", binaryPath, "../../cmd/plcc2fbc")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "building plcc2fbc: %v\n", err)
-		_ = os.RemoveAll(tmp)
-		os.Exit(1)
+	plccCheckBinaryPath = filepath.Join(tmp, "plcc-check")
+	for _, binary := range []string{binaryPath, plccCheckBinaryPath} {
+		name := filepath.Base(binary)
+		cmd := exec.Command("go", "build", "-o", binary, "../../cmd/"+name)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "building %s: %v\n", name, err)
+			_ = os.RemoveAll(tmp)
+			os.Exit(1)
+		}
 	}
 
 	exitCode := m.Run()

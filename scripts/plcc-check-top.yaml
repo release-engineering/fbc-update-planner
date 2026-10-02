@@ -1,0 +1,84 @@
+# Assess these operators in the listed order.
+selected:
+  - cluster-logging
+  - openshift-gitops-operator
+  - local-storage-operator
+  - kubernetes-nmstate-operator
+  - mcg-operator
+  - ocs-operator
+  - odf-csi-addons-operator
+  - odf-operator
+  - openshift-cert-manager-operator
+  - redhat-oadp-operator
+  - loki-operator
+  - recipe
+  - ocs-client-operator
+  - odf-prometheus-operator
+  - rook-ceph-operator
+  - cluster-observability-operator
+  - kubevirt-hyperconverged
+  - cephcsi-operator
+  - compliance-operator
+  - odf-dependencies
+  - openshift-pipelines-operator-rh
+  - devworkspace-operator
+  - metallb-operator
+  - web-terminal
+  - multicluster-engine
+  - advanced-cluster-management
+  - mtv-operator
+  - rhbk-operator
+  - rhacs-operator
+  - lvms-operator
+
+skipped:
+  - reason: "non-fbc operator"
+    operators:
+      - 3scale-operator
+      - amq-broker-rhel8
+      - amq-broker-rhel9
+      - amq-streams
+      - amq-streams-console
+      - amq-streams-proxy
+      - amq7-interconnect-operator
+      - ansible-cloud-addons-operator
+      - apicast-operator
+      - apicurio-registry-3
+      - bamoe-businessautomation-operator
+      - bamoe-kogito-operator
+      - businessautomation-operator
+      - cincinnati-operator
+      - cryostat-operator
+      - datagrid
+      - dpu-network-operator
+      - eap
+      - jws-operator
+      - logic-operator
+      - logic-operator-rhel8
+      - mtr-operator
+      - node-observability-operator
+      - red-hat-hawtio-operator
+      - rh-service-binding-operator
+      - rhpam-kogito-operator
+      - rhsso-operator
+      - service-registry-operator
+      - skupper-netobs-operator
+      - skupper-operator
+      - tang-operator
+  - reason: "ocp art operator"
+    operators:
+      - aws-efs-csi-driver-operator
+      - clusterresourceoverride
+      - gcp-filestore-csi-driver-operator
+      - ingress-node-firewall
+      - kubernetes-nmstate-operator
+      - local-storage-operator
+      - metallb-operator
+      - nfd
+      - pf-status-relay-operator
+      - ptp-operator
+      - secrets-store-csi-driver-operator
+      - smb-csi-driver-operator
+      - sriov-network-operator
+      - support-log-gather-operator
+      - vertical-pod-autoscaler

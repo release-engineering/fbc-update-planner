@@ -144,40 +144,63 @@ var catalogValidatorRegistry = []catalogValidatorEntry{
 	{"REQ-VAL-01", "catalog", []CatalogValidator{ValidateNoDuplicates}},
 }
 
-// LookupValidators resolves a list of label or group names into per-product
-// and catalog validators.
-// Accepted group names: "all", "syntax", "semantic", "catalog".
-// Accepted labels: any label in either registry (e.g. "REQ-DATE-03", "REQ-VAL-01").
-// Call on the full catalog before filtering so that Init functions can look up
-// cross-product context (e.g. OCP lifecycle data for platform-aligned checks).
-// Returns an error if any name is unknown.
-func (c *Catalog) LookupValidators(names ...string) ([]Validator, []CatalogValidator, error) {
+// resolvedValidator keeps rule metadata with its initialized callbacks so
+// findings can identify rules without interpreting their message strings.
+type resolvedValidator struct {
+	info    ValidatorInfo
+	product []Validator
+	catalog []CatalogValidator
+}
+
+func resolveValidators(source *Catalog, names []string) ([]resolvedValidator, error) {
 	labels, err := resolveLabels(names)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	var prodResult []Validator
-	for _, e := range validatorRegistry {
-		if !labels[e.Label] {
+	var rules []resolvedValidator
+	for _, entry := range validatorRegistry {
+		if !labels[entry.Label] {
 			continue
 		}
-		if e.Init != nil {
-			v, err := e.Init(c)
+		validators := entry.Validators
+		if entry.Init != nil {
+			validators, err = entry.Init(source)
 			if err != nil {
-				return nil, nil, fmt.Errorf("initializing %s: %w", e.Label, err)
+				return nil, fmt.Errorf("initializing %s: %w", entry.Label, err)
 			}
-			prodResult = append(prodResult, v...)
-		} else {
-			prodResult = append(prodResult, e.Validators...)
+		}
+		rules = append(rules, resolvedValidator{
+			info:    ValidatorInfo{Label: entry.Label, Group: entry.Group, Scope: ProductScope},
+			product: validators,
+		})
+	}
+	for _, entry := range catalogValidatorRegistry {
+		if labels[entry.Label] {
+			rules = append(rules, resolvedValidator{
+				info:    ValidatorInfo{Label: entry.Label, Group: entry.Group, Scope: CatalogScope},
+				catalog: entry.Validators,
+			})
 		}
 	}
-	var catResult []CatalogValidator
-	for _, e := range catalogValidatorRegistry {
-		if labels[e.Label] {
-			catResult = append(catResult, e.Validators...)
+	return rules, nil
+}
+
+func validateProduct(product Product, validators ...Validator) []string {
+	var reasons []string
+	for _, validator := range validators {
+		reasons = append(reasons, validator(product)...)
+	}
+	return reasons
+}
+
+func validateCatalog(products []Product, validators ...CatalogValidator) CatalogRejections {
+	rejections := make(CatalogRejections)
+	for _, validator := range validators {
+		for name, reasons := range validator(products) {
+			rejections[name] = append(rejections[name], reasons...)
 		}
 	}
-	return prodResult, catResult, nil
+	return rejections
 }
 
 func resolveLabels(names []string) (map[string]bool, error) {
@@ -251,49 +274,6 @@ func ListValidators() string {
 		fmt.Fprintf(&b, "  %-16s [%s]\n", entry.Label, entry.Group)
 	}
 	return b.String()
-}
-
-// ValidateProduct runs all provided validators on a single product and returns
-// the combined list of reasons. Returns nil if all validators pass.
-func ValidateProduct(p Product, validators ...Validator) []string {
-	var reasons []string
-	for _, v := range validators {
-		reasons = append(reasons, v(p)...)
-	}
-	return reasons
-}
-
-// Validate runs catalog validators across the catalog's products and returns
-// per-package reasons. If no validators are provided, uses
-// DefaultCatalogValidators(). When strict is true, products that trigger catalog
-// warnings (e.g. duplicated package names) are removed from c.Data.
-func (c *Catalog) Validate(strict bool, validators ...CatalogValidator) CatalogRejections {
-	if len(validators) == 0 {
-		validators = DefaultCatalogValidators()
-	}
-	rejections := make(CatalogRejections)
-	for _, v := range validators {
-		for pkg, r := range v(c.Data) {
-			rejections[pkg] = append(rejections[pkg], r...)
-		}
-	}
-	if strict && len(rejections) > 0 {
-		var filtered []Product
-		for _, p := range c.Data {
-			rejected := false
-			for _, pkg := range p.Packages() {
-				if _, found := rejections[pkg]; found {
-					rejected = true
-					break
-				}
-			}
-			if !rejected {
-				filtered = append(filtered, p)
-			}
-		}
-		c.Data = filtered
-	}
-	return rejections
 }
 
 // ValidateDatesStatic checks that dates resolve to static values using the

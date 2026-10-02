@@ -44,6 +44,20 @@ make generate-fbc
 
 Builds the tool, runs it against the live PLCC API and writes output to the fbc-samples dir
 
+## Report PLCC and catalog coverage
+
+```shell
+make plcc-check
+bin/plcc-check --validators syntax,catalog \
+  --catalog-image registry.redhat.io/redhat/redhat-operator-index:v5.0 \
+  -o report scripts/top-operators
+```
+
+Omit the operators file to assess all packages found in PLCC or the catalog.
+Catalog image inspection requires `opm` and registry access. For offline inputs,
+Slack payload generation, actions, and artifacts, see [PLCC reporting](docs/PLCC_CHECK.md).
+The reporting command exits 0 for findings and 1 for execution errors.
+
 ## Testing
 
 ```shell
@@ -55,6 +69,7 @@ See [End-to-End Tests](docs/E2E_TESTS.md) for the e2e test matrix and golden fil
 
 ## Documentation
 
+- [PLCC and Catalog Reporting](docs/PLCC_CHECK.md)
 - [Validation Rules](docs/VALIDATION_RULES.md)
 - [FBC Lifecycle Schema](docs/FBC_SCHEMA.md)
 - [End-to-End Tests](docs/E2E_TESTS.md)

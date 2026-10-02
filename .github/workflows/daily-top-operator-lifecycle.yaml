@@ -50,9 +50,10 @@ jobs:
           REGISTRY_AUTH_FILE: ${{ runner.temp }}/registry-auth/config.json
         run: |
           mkdir -p "$RUN_OUTPUT"
-          scripts/plcc-check.sh --webhook summary,list --validators syntax,catalog \
+          make plcc-check
+          bin/plcc-check --webhook summary,table,list --validators syntax,catalog \
             --catalog-image registry.redhat.io/redhat/redhat-operator-index:v5.0 \
-            -o "$RUN_OUTPUT" scripts/top-operators
+            --config scripts/plcc-check-top.yaml -o "$RUN_OUTPUT"
 
       - name: Upload top assessment artifacts
         if: ${{ always() }}

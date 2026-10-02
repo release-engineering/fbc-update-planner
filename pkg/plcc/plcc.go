@@ -17,278 +17,174 @@ limitations under the License.
 package plcc
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
+	"slices"
 	"sort"
-	"strings"
-	"time"
-
-	"github.com/avast/retry-go/v4"
 )
 
-// PackagesNotFoundError is returned when requested package names are not found in the catalog.
-type PackagesNotFoundError struct {
-	Names []string
+// DatasetOptions fixes the package and validator selections for one dataset.
+type DatasetOptions struct {
+	// Packages contains individual package names. Nil selects every product
+	// with a package name; a non-nil empty slice selects no products.
+	Packages []string
+	// Validators contains rule labels or groups. Empty selects "all";
+	// use []string{"none"} to disable PLCC validation.
+	Validators []string
 }
 
-func (e *PackagesNotFoundError) Error() string {
-	return fmt.Sprintf("packages not found in PLCC data: %s", strings.Join(e.Names, ", "))
+// Dataset owns a PLCC source snapshot and a working catalog for one fixed
+// selection. Construct it with NewDataset, then Validate before FilterInvalid.
+// Methods return independent copies. A Dataset is not safe for concurrent use.
+type Dataset struct {
+	source        Catalog
+	live          Catalog
+	sourceIndices []int
+	validators    []resolvedValidator
+	missing       []string
+	report        *ValidationReport
 }
 
-// APIURL is the Red Hat Product Life Cycle API endpoint.
-const APIURL = "https://access.redhat.com/product-life-cycles/api/v2/products"
-
-// OCPProductName is the PLCC product name for OpenShift Container Platform.
-const OCPProductName = "Red Hat OpenShift Container Platform"
-
-// Catalog holds the product lifecycle data returned by the PLCC API.
-type Catalog struct {
-	Data []Product `json:"data"`
-}
-
-// Product represents a software product with its lifecycle versions.
-type Product struct {
-	Name           string    `json:"name"`
-	Package        string    `json:"package"`
-	Versions       []Version `json:"versions"`
-	ReleaseCadence string    `json:"release_cadence"`
-	IsOperator     bool      `json:"is_operator"`
-}
-
-// Packages returns the unique, trimmed, non-empty package names for this
-// product. The package field may contain a comma-separated list (e.g.
-// "odf-operator,mcg-operator"). Duplicate names within the list are collapsed.
-func (p Product) Packages() []string {
-	if p.Package == "" {
-		return nil
+// NewDataset snapshots source, resolves validators against the full source,
+// and selects working products in stable package order. Selection narrows
+// comma-separated package names without expanding products. Missing requested
+// names are available through MissingPackages and do not cause an error.
+func NewDataset(source *Catalog, options DatasetOptions) (*Dataset, error) {
+	if source == nil {
+		return nil, fmt.Errorf("PLCC source catalog is nil")
 	}
-	parts := strings.Split(p.Package, ",")
-	seen := make(map[string]struct{}, len(parts))
-	var filtered []string
-	for _, s := range parts {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		filtered = append(filtered, s)
+	d := &Dataset{source: cloneCatalog(*source)}
+	names := options.Validators
+	if len(names) == 0 {
+		names = []string{"all"}
 	}
-	if len(filtered) == 0 {
-		return nil
-	}
-	return filtered
-}
-
-// Version represents a product version with its lifecycle phases and platform compatibility.
-type Version struct {
-	Name                   string  `json:"name"`
-	Phases                 []Phase `json:"phases"`
-	OpenShiftCompatibility string  `json:"openshift_compatibility"`
-	Tier                   string  `json:"tier"`
-}
-
-// Phase represents a lifecycle phase with start and end dates (ISO8601 timestamps).
-type Phase struct {
-	Name            string `json:"name"`
-	StartDate       string `json:"start_date"`
-	EndDate         string `json:"end_date"`
-	StartDateFormat string `json:"start_date_format"`
-	EndDateFormat   string `json:"end_date_format"`
-}
-
-// Fetch retrieves the product catalog from the default PLCC API endpoint.
-func Fetch() (*Catalog, error) {
-	return FetchFrom(APIURL, &http.Client{Timeout: 30 * time.Second})
-}
-
-var retryOptions = []retry.Option{
-	retry.Attempts(3),
-	retry.Delay(60 * time.Second),
-	retry.DelayType(retry.BackOffDelay),
-	retry.LastErrorOnly(true),
-}
-
-// FetchFrom retrieves the product catalog from the given URL using the provided HTTP client.
-// It makes up to 3 attempts with exponential backoff on errors.
-func FetchFrom(url string, client *http.Client) (*Catalog, error) {
-	catalog, err := retry.DoWithData(func() (*Catalog, error) {
-		return fetch(url, client)
-	}, retryOptions...)
+	var err error
+	d.validators, err = resolveValidators(&d.source, names)
 	if err != nil {
-		return nil, fmt.Errorf("after retries: %w", err)
+		return nil, err
 	}
-	return catalog, nil
-}
-
-func fetch(url string, client *http.Client) (*Catalog, error) {
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
-	}
-
-	var catalog Catalog
-	if err := json.Unmarshal(body, &catalog); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-	return &catalog, nil
-}
-
-// Load reads the product catalog from a local JSON file.
-func Load(path string) (*Catalog, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading PLCC file: %w", err)
-	}
-	var catalog Catalog
-	if err := json.Unmarshal(data, &catalog); err != nil {
-		return nil, fmt.Errorf("decoding PLCC file: %w", err)
-	}
-	return &catalog, nil
-}
-
-// DropWithoutPackageName removes products that have no package name, modifying the catalog in place.
-func (c *Catalog) DropWithoutPackageName() {
-	filtered := make([]Product, 0, len(c.Data))
-	for _, p := range c.Data {
-		if len(p.Packages()) > 0 {
-			filtered = append(filtered, p)
-		}
-	}
-	c.Data = filtered
-}
-
-// ExpandPackages splits products with comma-separated package names into
-// separate Product entries, one per package name. Products with a single
-// package name are unchanged. Call this after validation to preserve original
-// product shape in validation logs and --dump-plcc output.
-func (c *Catalog) ExpandPackages() {
-	var expanded []Product
-	for _, p := range c.Data {
-		names := p.Packages()
-		if len(names) <= 1 {
-			if len(names) == 1 {
-				p.Package = names[0]
-			}
-			expanded = append(expanded, p)
-			continue
-		}
-		for _, name := range names {
-			clone := p
-			clone.Package = name
-			expanded = append(expanded, clone)
-		}
-	}
-	c.Data = expanded
-}
-
-// FilterByPackageNames keeps only products where at least one expanded package name
-// matches the provided list, modifying the catalog in place. It returns a
-// PackagesNotFoundError if any names were not found. When a product has
-// comma-separated names (e.g. "alpha-op,beta-op"), only the matched names are
-// preserved in the Package field so downstream expansion emits only requested packages.
-// The catalog is modified in place also in case of error.
-func (c *Catalog) FilterByPackageNames(names []string) error {
-	allowed := make(map[string]bool, len(names))
-	for _, name := range names {
-		allowed[name] = true
-	}
-	found := make(map[string]bool, len(names))
-	filtered := make([]Product, 0, len(names))
-	for i := range c.Data {
-		var matchedNames []string
-		for _, pkg := range c.Data[i].Packages() {
-			if allowed[pkg] {
-				found[pkg] = true
-				matchedNames = append(matchedNames, pkg)
-			}
-		}
-		if len(matchedNames) > 0 {
-			p := c.Data[i]
-			p.Package = strings.Join(matchedNames, ",")
-			filtered = append(filtered, p)
-		}
-	}
-	c.Data = filtered
-
-	var notFound []string
-	for _, name := range names {
-		if !found[name] {
-			notFound = append(notFound, name)
-		}
-	}
-	if len(notFound) > 0 {
-		return &PackagesNotFoundError{Names: notFound}
-	}
-	return nil
-}
-
-// FindProductByName returns a pointer to the first product matching the given
-// name, or nil if no match is found.
-func (c *Catalog) FindProductByName(name string) *Product {
-	for i := range c.Data {
-		if c.Data[i].Name == name {
-			return &c.Data[i]
-		}
-	}
-	return nil
-}
-
-// Len returns the number of products currently in the catalog.
-func (c *Catalog) Len() int {
-	return len(c.Data)
-}
-
-// SortByPackage sorts products by package name in ascending order.
-func (c *Catalog) SortByPackage() {
-	sort.Slice(c.Data, func(i, j int) bool {
-		return c.Data[i].Package < c.Data[j].Package
+	selected, missing := selectProducts(d.source.Data, options.Packages)
+	sort.SliceStable(selected, func(i, j int) bool {
+		return selected[i].product.Package < selected[j].product.Package
 	})
+	d.live.Data = make([]Product, len(selected))
+	d.sourceIndices = make([]int, len(selected))
+	for i, entry := range selected {
+		d.live.Data[i] = entry.product
+		d.sourceIndices[i] = entry.sourceIndex
+	}
+	d.live = cloneCatalog(d.live)
+	d.missing = missing
+	return d, nil
 }
 
-// Dump writes the catalog products to a JSON file.
-func (c *Catalog) Dump(path string) (err error) {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
+// Source returns an independent copy of the complete original catalog,
+// including products without package names and products excluded by selection.
+func (d *Dataset) Source() *Catalog {
+	catalog := cloneCatalog(d.source)
+	return &catalog
+}
+
+// Catalog returns an independent copy of the selected working catalog,
+// excluding rejected products only after FilterInvalid has been called.
+func (d *Dataset) Catalog() *Catalog {
+	catalog := cloneCatalog(d.live)
+	return &catalog
+}
+
+// Validators returns the resolved rules in registry order, with duplicates
+// removed. Metadata describes rules, each of which may run several callbacks.
+func (d *Dataset) Validators() []ValidatorInfo {
+	result := make([]ValidatorInfo, len(d.validators))
+	for i, rule := range d.validators {
+		result[i] = rule.info
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = cerr
+	return result
+}
+
+// MissingPackages returns requested names absent from the source, in request
+// order. Products rejected during validation are not considered missing.
+func (d *Dataset) MissingPackages() []string {
+	return slices.Clone(d.missing)
+}
+
+// Validate records every selected catalog and product rule failure without
+// changing either catalog. It returns an independent copy of the report.
+// Subsequent calls return the saved report, even after filtering.
+func (d *Dataset) Validate() ValidationReport {
+	if d.report != nil {
+		return cloneValidationReport(*d.report)
+	}
+	report := ValidationReport{Products: make([]ProductValidation, len(d.live.Data))}
+	for i, product := range d.live.Data {
+		report.Products[i] = ProductValidation{
+			SourceIndex: d.sourceIndices[i],
+			Packages:    product.Packages(),
 		}
-	}()
-
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	return enc.Encode(c)
+	}
+	// Catalog rules run once across the selection. Attach each rejection to
+	// every affected product, retaining the particular package it targets.
+	for _, rule := range d.validators {
+		if rule.info.Scope != CatalogScope {
+			continue
+		}
+		rejections := validateCatalog(d.live.Data, rule.catalog...)
+		for i := range report.Products {
+			product := &report.Products[i]
+			for _, name := range product.Packages {
+				reasons, rejected := rejections[name]
+				if rejected {
+					product.Failures = append(product.Failures, ValidationFailure{
+						Validator: rule.info,
+						Packages:  []string{name},
+						Reasons:   slices.Clone(reasons),
+					})
+				}
+			}
+		}
+	}
+	// Product rules also run for products with catalog failures, so filtering
+	// policy cannot hide additional data quality problems.
+	for i, product := range d.live.Data {
+		for _, rule := range d.validators {
+			if rule.info.Scope != ProductScope {
+				continue
+			}
+			reasons := validateProduct(product, rule.product...)
+			if len(reasons) > 0 {
+				report.Products[i].Failures = append(report.Products[i].Failures, ValidationFailure{
+					Validator: rule.info,
+					Packages:  slices.Clone(report.Products[i].Packages),
+					Reasons:   reasons,
+				})
+			}
+		}
+	}
+	d.report = &report
+	return cloneValidationReport(report)
 }
 
-// ParseTimestamp parses an ISO8601 timestamp as used by the PLCC API (e.g. "2007-06-01T00:00:00.000Z").
-func ParseTimestamp(s string) (time.Time, error) {
-	if s == "N/A" || s == "" {
-		return time.Time{}, fmt.Errorf("timestamp is %q (unset)", s)
+// FilterInvalid removes working products with any recorded failure. Validate
+// must be called first. Filtering is idempotent and preserves the saved report.
+// Omit this call to retain invalid products for permissive processing.
+func (d *Dataset) FilterInvalid() error {
+	if d.report == nil {
+		return fmt.Errorf("validate before filtering invalid PLCC products")
 	}
-	t, err := time.Parse("2006-01-02T15:04:05.000Z", s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid ISO8601 timestamp %q: %w", s, err)
+	rejected := make(map[int]bool)
+	for _, product := range d.report.Products {
+		if len(product.Failures) > 0 {
+			rejected[product.SourceIndex] = true
+		}
 	}
-	return t, nil
-}
-
-// FormatDate formats a time value as "YYYY-MM-DD".
-func FormatDate(t time.Time) string {
-	return t.Format("2006-01-02")
+	products := make([]Product, 0, len(d.live.Data))
+	indices := make([]int, 0, len(d.sourceIndices))
+	for i, product := range d.live.Data {
+		if !rejected[d.sourceIndices[i]] {
+			products = append(products, product)
+			indices = append(indices, d.sourceIndices[i])
+		}
+	}
+	d.live.Data = products
+	d.sourceIndices = indices
+	return nil
 }

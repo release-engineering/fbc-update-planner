@@ -1,49 +1,67 @@
-Building plcc2fbc...
-Running plcc2fbc with 4 operators...
-Fetching catalog package list from $CATALOG_IMAGE...
+Operator lifecycle assessment
 
-=== Requested operators ===
-     PLCC       CATALOG    OPERATOR
-  *  OK         OK         aws-efs-csi-driver-operator
-     INVALID    MISSING    barbican-operator
-     MISSING    MISSING    totally-nonexistent-operator-xyz
-     DUPLICATE  MISSING    amq-streams
+Summary
+Catalog image: testdata/catalog-fbc
 
-=== Summary ===
-  Total operators:   4
-  PLCC OK:           1 / 4
-  PLCC DUPLICATE:    1 / 4
-  PLCC INVALID:      1 / 4
-  PLCC MISSING:      1 / 4
-  CATALOG OK:        1 / 4
-  CATALOG PARTIAL:   0 / 4
-  CATALOG MISSING:   3 / 4
-  Fully done:        1 / 4
+Total operators: 4
+Skipped operators: 0    (Status counts exclude skipped operators)
+READY operators: 0/4
+PLCC: OK 0 | MISSING 1 | INCOMPLETE 0 | INVALID 1 | REGRESSED 1 | DUPLICATE 1
+Catalog: OK 0 | MISSING 0 | INCOMPLETE 0 | NO BUNDLES 4
 
-=== Validation issues detail ===
-  amq-streams:
-    - REQ-VAL-01: package "amq-streams" appears in 2 products
-  barbican-operator:
-    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
-    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
-    - REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+PLCC/Catalog X/Y: X versions available, Y versions required.
+   ACTION    OPERATOR                          PLCC       CATALOG     SKIPPED
+📋 PLCCDATA  aws-efs-csi-driver-operator       REGRESSED  NO BUNDLES
+📋 PLCCDATA  barbican-operator                 INVALID    NO BUNDLES
+📋 PLCCDATA  totally-nonexistent-operator-xyz  MISSING    NO BUNDLES
+📋 PLCCDATA  amq-streams                       DUPLICATE  NO BUNDLES
 
-=== Missing lifecycle versions ===
-  (none)
+List
 
-=== CSV operator lists ===
-- Missing: totally-nonexistent-operator-xyz
-- Duplicated: amq-streams
-- With issues: barbican-operator
-- PLCC OK: aws-efs-csi-driver-operator
-- Catalog OK: aws-efs-csi-driver-operator
-- Catalog partial:
-- Catalog missing: barbican-operator,totally-nonexistent-operator-xyz,amq-streams
-- Fully done: aws-efs-csi-driver-operator
+✅ OK - operators ready 0/4
+None
 
-=== Generated files ===
-  $OUTDIR/fbc-output.yaml FBC blobs
-  $OUTDIR/validation.jsonl Validation results
-  $OUTDIR/slog.json Operational log
-  $OUTDIR/catalog-packages.txt Catalog package list
-  $OUTDIR/summary.txt Summary
+📋 PLCCDATA - operators that need PLCC fixes 4/4
+aws-efs-csi-driver-operator,barbican-operator,totally-nonexistent-operator-xyz,amq-streams
+
+📦 OPERATOR - operators that need a catalog rebuild 0/4 (PLCC data ready, missing bundles or lifecycle data in the catalog)
+None
+
+➖ SKIPPED - operators excluded from action reporting 0/4
+None
+
+Details
+
+aws-efs-csi-driver-operator
+  - [catalog-bundles-missing] No operator bundles are present in the catalog.
+  - [plcc-version-regressed] PLCC version 1.0 is missing but its lifecycle data is already shipped in the catalog.
+
+barbican-operator
+  - [plcc-validation; REQ-TIER-PA-01; source product 16; targets barbican-operator] REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
+  - [plcc-validation; REQ-TIER-PA-01; source product 16; targets barbican-operator] REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
+  - [plcc-validation; REQ-TIER-ALL-01; source product 16; targets barbican-operator] REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+  - [catalog-bundles-missing] No operator bundles are present in the catalog.
+  - [catalog-lifecycle-missing] No lifecycle entry is present in the catalog.
+
+totally-nonexistent-operator-xyz
+  - [plcc-package-missing] Package is absent from source PLCC.
+  - [catalog-bundles-missing] No operator bundles are present in the catalog.
+  - [catalog-lifecycle-missing] No lifecycle entry is present in the catalog.
+
+amq-streams
+  - [plcc-validation; REQ-VAL-01; source product 7; targets amq-streams] REQ-VAL-01: package "amq-streams" appears in 2 products
+  - [plcc-validation; REQ-DATE-04; source product 7; targets amq-streams] REQ-DATE-04: version "1.x" phase "Maintenance support": start (2022-01-31) is not one day after previous phase "Full support" end (2022-01-31)
+  - [plcc-validation; REQ-VER-01; source product 7; targets amq-streams] REQ-VER-01: version name "3.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 7; targets amq-streams] REQ-VER-01: version name "1.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 7; targets amq-streams] REQ-VER-01: version name "2.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-TIER-ALL-01; source product 7; targets amq-streams] REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+  - [plcc-validation; CUSTOM-03; source product 7; targets amq-streams] CUSTOM-03: version "1.x" phase "Maintenance support": end (2022-01-31) is not after start (2022-01-31)
+  - [plcc-validation; REQ-VAL-01; source product 227; targets amq-streams] REQ-VAL-01: package "amq-streams" appears in 2 products
+  - [plcc-validation; REQ-DATE-04; source product 227; targets amq-streams] REQ-DATE-04: version "1.x" phase "Maintenance support": start (2022-01-31) is not one day after previous phase "Full support" end (2022-01-31)
+  - [plcc-validation; REQ-VER-01; source product 227; targets amq-streams] REQ-VER-01: version name "3.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 227; targets amq-streams] REQ-VER-01: version name "1.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 227; targets amq-streams] REQ-VER-01: version name "2.x" is not MAJOR.MINOR
+  - [plcc-validation; CUSTOM-01; source product 227; targets amq-streams] CUSTOM-01: product is missing the is_operator flag
+  - [plcc-validation; CUSTOM-03; source product 227; targets amq-streams] CUSTOM-03: version "1.x" phase "Maintenance support": end (2022-01-31) is not after start (2022-01-31)
+  - [catalog-bundles-missing] No operator bundles are present in the catalog.
+  - [catalog-lifecycle-missing] No lifecycle entry is present in the catalog.
