@@ -178,6 +178,29 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - FBC output uses `YYYY-MM-DD`
 - `"N/A"` or empty timestamps translate to nil (omitted from output)
 
+## Architecture Decisions
+
+### When to create a new binary
+
+New tools that serve a different purpose than PLCC→FBC translation should be separate binaries under `cmd/`, not new flags on `plcc2fbc`. The `plcc2fbc` binary is specifically for converting PLCC lifecycle data to FBC YAML — assessment, reporting, classification, and catalog comparison tools belong in their own command (e.g., `cmd/plcc-check`).
+
+**Decision test:** If the proposed feature does not produce FBC output, it does not belong in `plcc2fbc`.
+
+### Shared library pattern
+
+Common logic lives in `pkg/` and is imported by multiple binaries. When creating a new binary:
+
+- Reuse existing `pkg/` packages (`pkg/plcc` for PLCC API client and data types, `pkg/fbc` for FBC types and translation, `pkg/report` for validation results) rather than duplicating logic.
+- If the new binary needs shared types or utilities that don't exist yet, add them to an appropriate `pkg/` package — not inside `cmd/`.
+
+### CLI surface rule
+
+Do not add flags to `plcc2fbc` that are unrelated to FBC generation. If a flag only makes sense for a different workflow (e.g., `--report`, `--catalog-data`, `--classify`), it belongs in a different binary. Each binary should have a focused, cohesive set of flags that all relate to its core purpose.
+
+### Shell script integration
+
+When replacing shell script logic with Go, prefer creating a dedicated binary that the script delegates to, rather than adding modes to `plcc2fbc`. This keeps each binary's responsibility clear and avoids flag-combination complexity (e.g., mutual exclusion between `--report` and normal FBC output).
+
 ## Gotchas
 
 - The CLI exits with code 1 for fatal errors, code 2 if no valid FBC blobs are produced, and code 3 if requested `-p` packages are not found (without `--allow-missing`) — all are intentional
