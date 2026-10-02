@@ -187,3 +187,12 @@ Versions must match `^\d+\.\d+$` (MAJOR.MINOR only). This is checked by `Validat
 - Design choice: `newPackage()` delegates to `translateVersion()` which iterates `converterRegistry` directly; any converter error (malformed version name, unparseable timestamps, invalid OCP format) rejects the entire package. The FBC type layer enforces schema invariants by construction, separate from PLCC validators which enforce data quality policy
 - Logging model: structured `slog` logs always go to stdout (JSON handler). Validation/filtering reports (`report.LogResults`) default to stderr; `-l` redirects them to a file. `main()` prints a human-readable error to stderr for all non-zero exit codes; `run()` uses `slog.Error` only for exit-code-3 (per-package details on stdout)
 - All structured logging uses `log/slog` (JSON handler) — the `log` package is not used
+
+## Release Process
+
+See `docs/RELEASING.md` for the full workflow. Key points for reviewers:
+
+- Release PRs use branch `release/vX.Y.Z` and touch `VERSION` + `Dockerfile` (ARG VERSION) — these are mechanical version bumps, not infrastructure changes
+- `docs/RELEASING.md` updates may be bundled with version bumps when the release process itself is refined
+- Protected paths that require careful review: `.github/workflows/`, `.tekton/`, `CODEOWNERS`, `.fullsend/config.yaml`
+- Routine paths that change on every release: `VERSION`, `Dockerfile`
