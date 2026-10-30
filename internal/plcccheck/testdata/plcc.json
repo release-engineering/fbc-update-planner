@@ -1,0 +1,17 @@
+{
+  "data": [
+    {"name":"Red Hat OpenShift Container Platform","versions":[{"name":"4.18","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"full","package":"full","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]},{"name":"1.10","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"mixed","package":"mixed","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]},{"name":"1.3","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"unpublished","package":"unpublished","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"validator","package":"validator","is_operator":false,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"converter","package":"converter","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]},{"name":"1.3","phases":[{"name":"Full support","start_date":"bad-date","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"filter","package":"filter","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]},{"name":"1.3","phases":[{"name":"Full support","start_date":"N/A","end_date":"N/A"}]}]},
+    {"name":"shared aliases","package":" alpha, beta, alpha ","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"second beta","package":"beta","is_operator":true,"versions":[{"name":"1.3","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"no-bundles","package":"no-bundles","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"lifecycle-only","package":"lifecycle-only","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"empty-lifecycle","package":"empty-lifecycle","is_operator":true,"versions":[{"name":"1.2","phases":[{"name":"Full support","start_date":"2020-01-01T00:00:00.000Z","end_date":"2020-12-31T00:00:00.000Z"}]}]},
+    {"name":"empty PLCC product","package":"empty-plcc","is_operator":true,"versions":[]}
+  ]
+}

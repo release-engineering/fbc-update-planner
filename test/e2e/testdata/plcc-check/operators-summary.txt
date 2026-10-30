@@ -1,36 +1,54 @@
-Building plcc2fbc...
-Running plcc2fbc with 4 operators...
+Operator lifecycle assessment
 
-=== Requested operators ===
-     PLCC       OPERATOR
-  *  OK         aws-efs-csi-driver-operator
-     INVALID    barbican-operator
-     MISSING    totally-nonexistent-operator-xyz
-     DUPLICATE  amq-streams
+Summary
+Total operators: 4
+Skipped operators: 0    (Status counts exclude skipped operators)
+PLCC: OK 1 | MISSING 1 | INCOMPLETE 0 | INVALID 1 | REGRESSED 0 | DUPLICATE 1
+Catalog: NOT CHECKED
+OK means: PLCC OK; catalog not checked.
 
-=== Summary ===
-  Total operators:   4
-  PLCC OK:           1 / 4
-  PLCC DUPLICATE:    1 / 4
-  PLCC INVALID:      1 / 4
-  PLCC MISSING:      1 / 4
+   ACTION    OPERATOR                          PLCC       CATALOG      SKIPPED
+✅           aws-efs-csi-driver-operator       OK         NOT CHECKED
+📋 PLCCDATA  barbican-operator                 INVALID    NOT CHECKED
+📋 PLCCDATA  totally-nonexistent-operator-xyz  MISSING    NOT CHECKED
+📋 PLCCDATA  amq-streams                       DUPLICATE  NOT CHECKED
 
-=== Validation issues detail ===
-  amq-streams:
-    - REQ-VAL-01: package "amq-streams" appears in 2 products
-  barbican-operator:
-    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
-    - REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
-    - REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+List
 
-=== CSV operator lists ===
-- Missing: totally-nonexistent-operator-xyz
-- Duplicated: amq-streams
-- With issues: barbican-operator
-- PLCC OK: aws-efs-csi-driver-operator
+✅ OK - operators with PLCC data ready 1/4 (catalog not checked)
+aws-efs-csi-driver-operator
 
-=== Generated files ===
-  $OUTDIR/fbc-output.yaml FBC blobs
-  $OUTDIR/validation.jsonl Validation results
-  $OUTDIR/slog.json Operational log
-  $OUTDIR/summary.txt Summary
+📋 PLCCDATA - operators that need PLCC fixes 3/4
+barbican-operator,totally-nonexistent-operator-xyz,amq-streams
+
+📦 OPERATOR - operators that need a catalog rebuild 0/4 (PLCC data ready, missing bundles or lifecycle data in the catalog)
+None
+
+➖ SKIPPED - operators excluded from action reporting 0/4
+None
+
+Details
+
+barbican-operator
+  - [plcc-validation; REQ-TIER-PA-01; source product 16; targets barbican-operator] REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support" with parseable dates
+  - [plcc-validation; REQ-TIER-PA-01; source product 16; targets barbican-operator] REQ-TIER-PA-01: version "1.0": platform-aligned missing required phase "Extended update support Term 2" with parseable dates
+  - [plcc-validation; REQ-TIER-ALL-01; source product 16; targets barbican-operator] REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+
+totally-nonexistent-operator-xyz
+  - [plcc-package-missing] Package is absent from source PLCC.
+
+amq-streams
+  - [plcc-validation; REQ-VAL-01; source product 7; targets amq-streams] REQ-VAL-01: package "amq-streams" appears in 2 products
+  - [plcc-validation; REQ-DATE-04; source product 7; targets amq-streams] REQ-DATE-04: version "1.x" phase "Maintenance support": start (2022-01-31) is not one day after previous phase "Full support" end (2022-01-31)
+  - [plcc-validation; REQ-VER-01; source product 7; targets amq-streams] REQ-VER-01: version name "3.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 7; targets amq-streams] REQ-VER-01: version name "1.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 7; targets amq-streams] REQ-VER-01: version name "2.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-TIER-ALL-01; source product 7; targets amq-streams] REQ-TIER-ALL-01: release cadence not specified (release_cadence="")
+  - [plcc-validation; CUSTOM-03; source product 7; targets amq-streams] CUSTOM-03: version "1.x" phase "Maintenance support": end (2022-01-31) is not after start (2022-01-31)
+  - [plcc-validation; REQ-VAL-01; source product 227; targets amq-streams] REQ-VAL-01: package "amq-streams" appears in 2 products
+  - [plcc-validation; REQ-DATE-04; source product 227; targets amq-streams] REQ-DATE-04: version "1.x" phase "Maintenance support": start (2022-01-31) is not one day after previous phase "Full support" end (2022-01-31)
+  - [plcc-validation; REQ-VER-01; source product 227; targets amq-streams] REQ-VER-01: version name "3.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 227; targets amq-streams] REQ-VER-01: version name "1.x" is not MAJOR.MINOR
+  - [plcc-validation; REQ-VER-01; source product 227; targets amq-streams] REQ-VER-01: version name "2.x" is not MAJOR.MINOR
+  - [plcc-validation; CUSTOM-01; source product 227; targets amq-streams] CUSTOM-01: product is missing the is_operator flag
+  - [plcc-validation; CUSTOM-03; source product 227; targets amq-streams] CUSTOM-03: version "1.x" phase "Maintenance support": end (2022-01-31) is not after start (2022-01-31)
