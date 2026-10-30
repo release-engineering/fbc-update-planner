@@ -1,0 +1,4 @@
+{"schema":"olm.package","name":"full","defaultChannel":"stable"}
+{"schema":"olm.channel","name":"stable","package":"full","entries":[{"name":"full.v1.2.0"}]}
+{"schema":"olm.bundle","package":"full","name":"full.v1.2.0","image":"registry.example.test/full:v1.2.0","properties":[{"type":"olm.package","value":{"packageName":"full","version":"1.2.0"}}]}
+{"schema":"io.openshift.operators.lifecycles.v1alpha1","package":"full","versions":[{"name":"1.10","phases":[{"name":"Full support","startDate":"2020-01-01","endDate":"2020-12-31"}]},{"name":"1.2","phases":[{"name":"Full support","startDate":"2020-01-01","endDate":"2020-12-31"}]}]}

@@ -20,4 +20,13 @@ limitations under the License.
 // types for working with that data. Use [Fetch] with the default API endpoint
 // or [FetchFrom] with a custom URL and HTTP client. Use [Load] to read from
 // a local JSON file.
+// [FetchContext] and [FetchFromContext] also accept a context to cancel requests
+// and retry delays.
+//
+// [NewDataset] preserves an independent source snapshot and prepares a working
+// catalog with fixed package and validator selections. [Dataset.Validate]
+// records structured findings without removing products. Call
+// [Dataset.FilterInvalid] for strict processing, or retain the selected catalog
+// for permissive processing. Findings describe PLCC data quality; FBC conversion
+// and reporting policy are the caller's responsibility.
 package plcc

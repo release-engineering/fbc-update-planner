@@ -12,6 +12,10 @@ build: plcc2fbc
 plcc2fbc:
 	go build $(GOFLAGS) -ldflags='$(LDFLAGS)' -o bin/plcc2fbc ./cmd/plcc2fbc
 
+.PHONY: plcc-check
+plcc-check:
+	go build $(GOFLAGS) -o bin/plcc-check ./cmd/plcc-check
+
 .PHONY: test
 test:
 	go test -v -count 1 ./...
@@ -31,18 +35,20 @@ update-e2e-source:
 	$(MAKE) update-e2e
 
 .PHONY: update-e2e-plcc-check
-update-e2e-plcc-check:
-	$(eval OUT := $(shell mktemp -d))
-	./scripts/plcc-check.sh -i test/e2e/testdata/plcc.json -o $(OUT) test/e2e/testdata/plcc-check-operators.txt
-	sed 's#$(OUT)#$$OUTDIR#g' $(OUT)/summary.txt > test/e2e/testdata/plcc-check/operators-summary.txt
-	cp $(OUT)/validation.jsonl test/e2e/testdata/plcc-check/operators-validation.jsonl
-	rm -rf $(OUT)
-	$(eval OUT := $(shell mktemp -d))
-	./scripts/plcc-check.sh -i test/e2e/testdata/plcc.json -o $(OUT) \
-		--catalog-image test/e2e/testdata/catalog-fbc test/e2e/testdata/plcc-check-operators.txt
-	sed -e 's#$(OUT)#$$OUTDIR#g' -e 's#test/e2e/testdata/catalog-fbc#$$CATALOG_IMAGE#g' \
-		$(OUT)/summary.txt > test/e2e/testdata/plcc-check/catalog-summary.txt
-	rm -rf $(OUT)
+update-e2e-plcc-check: plcc-check
+	@set -eu; \
+		cd test/e2e; \
+		check_out=$$(mktemp -d); \
+		trap 'rm -rf "$$check_out"' EXIT; \
+		../../bin/plcc-check -i testdata/plcc.json -o "$$check_out" testdata/plcc-check-operators.txt; \
+		cp "$$check_out/summary.txt" testdata/plcc-check/operators-summary.txt; \
+		cp "$$check_out/validation.jsonl" testdata/plcc-check/operators-validation.jsonl; \
+		../../bin/plcc-check -i testdata/plcc.json -o "$$check_out" \
+			--catalog-image testdata/catalog-fbc testdata/plcc-check-operators.txt; \
+		cp "$$check_out/summary.txt" testdata/plcc-check/catalog-summary.txt; \
+		../../bin/plcc-check -i ../../internal/plcccheck/testdata/plcc.json -o "$$check_out" \
+			--catalog-input ../../internal/plcccheck/testdata/catalog.json --validators syntax,catalog; \
+		cp "$$check_out/summary.txt" testdata/plcc-check/command-summary.txt
 
 .PHONY: generate-fbc
 generate-fbc: plcc2fbc
